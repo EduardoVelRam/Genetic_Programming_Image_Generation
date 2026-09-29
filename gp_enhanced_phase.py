@@ -246,3 +246,381 @@ pset.addTerminal(
     name="RECTANGLE"
 )
 
+
+# Primitivas geométricas evolutivas
+# Circulo
+def gp_circle(radius, x, y):
+
+    radius = float(np.clip(radius, 1.0, 14.0))
+    x = float(np.clip(x, 0.0, 27.0))
+    y = float(np.clip(y, 0.0, 27.0))
+
+    return create_circle(
+        size=28,
+        radius=radius,
+        x=x,
+        y=y
+    )
+
+pset.addPrimitive(
+    gp_circle,
+    [FLOAT, FLOAT, FLOAT],
+    IMAGE,
+    name="CIRCLE_PARAM"
+)
+
+# Línea
+def gp_line(angle, length, thickness):
+
+    angle = float(angle)
+
+    length = float(
+        np.clip(length, 2.0, 28.0)
+    )
+
+    thickness = float(
+        np.clip(thickness, 1.0, 6.0)
+    )
+
+    image = np.zeros(
+        (28, 28),
+        dtype=np.float32
+    )
+
+    center = 13.5
+
+    half_length = length / 2.0
+
+    dx = np.cos(angle) * half_length
+    dy = np.sin(angle) * half_length
+
+    x0 = center - dx
+    y0 = center - dy
+
+    x1 = center + dx
+    y1 = center + dy
+
+    rr, cc = line(
+        int(round(y0)),
+        int(round(x0)),
+        int(round(y1)),
+        int(round(x1))
+    )
+
+    image[rr, cc] = 255.0
+
+    if thickness > 1:
+
+        image = dilation(
+            image,
+            footprint=disk(
+                max(1, int(thickness // 2))
+            )
+        )
+
+    return image.astype(np.float32)
+
+pset.addPrimitive(
+    gp_line,
+    [FLOAT, FLOAT, FLOAT],
+    IMAGE,
+    name="LINE_PARAM"
+)
+
+# RECTÁNGULO
+def gp_rectangle(
+    width,
+    height,
+    x,
+    y
+):
+
+    width = float(
+        np.clip(width, 2.0, 28.0)
+    )
+
+    height = float(
+        np.clip(height, 2.0, 28.0)
+    )
+
+    x = float(
+        np.clip(x, 0.0, 27.0)
+    )
+
+    y = float(
+        np.clip(y, 0.0, 27.0)
+    )
+
+    image = np.zeros(
+        (28, 28),
+        dtype=np.float32
+    )
+
+    x0 = int(round(x - width / 2))
+    x1 = int(round(x + width / 2))
+
+    y0 = int(round(y - height / 2))
+    y1 = int(round(y + height / 2))
+
+    x0 = max(0, x0)
+    x1 = min(28, x1)
+
+    y0 = max(0, y0)
+    y1 = min(28, y1)
+
+    image[y0:y1, x0:x1] = 255.0
+
+    return image
+
+pset.addPrimitive(
+    gp_rectangle,
+    [FLOAT, FLOAT, FLOAT, FLOAT],
+    IMAGE,
+    name="RECTANGLE_PARAM"
+)
+
+# Parámetros evolutivos
+pset.addEphemeralConstant(
+    "ANGLE",
+    lambda: random.uniform(-np.pi, np.pi),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "LENGTH",
+    lambda: random.uniform(2.0, 28.0),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "THICKNESS",
+    lambda: random.uniform(1.0, 6.0),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "RADIUS",
+    lambda: random.uniform(1.0, 14.0),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "X",
+    lambda: random.uniform(0.0, 27.0),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "Y",
+    lambda: random.uniform(0.0, 27.0),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "WIDTH",
+    lambda: random.uniform(2.0, 28.0),
+    FLOAT
+)
+
+pset.addEphemeralConstant(
+    "HEIGHT",
+    lambda: random.uniform(2.0, 28.0),
+    FLOAT
+)
+
+# OPERADORES MORFOLÓGICOS
+selem = disk(1)
+
+average_kernel = (
+    np.ones((3, 3), dtype=np.float32) / 9.0
+)
+
+def clip_image(image):
+    return np.clip(image, 0.0, 255.0).astype(np.float32)
+
+def gp_erosion(image):
+    return clip_image(
+        erosion(image, footprint=selem
+        )
+    )
+
+def gp_dilation(image):
+    return clip_image(
+        dilation(image, footprint=selem
+        )
+    )
+
+def gp_opening(image):
+    return clip_image(
+        opening(image, footprint=selem
+        )
+    )
+
+def gp_closing(image):
+    return clip_image(
+        closing(image, footprint=selem)
+    )
+
+def gp_convolution(image):
+    return clip_image(
+        convolve(image, average_kernel, mode="reflect"
+        )
+    )
+
+# Registro
+pset.addPrimitive(
+    gp_erosion,
+    [IMAGE],
+    IMAGE
+)
+
+pset.addPrimitive(
+    gp_dilation,
+    [IMAGE],
+    IMAGE
+)
+
+pset.addPrimitive(
+    gp_opening,
+    [IMAGE],
+    IMAGE
+)
+
+pset.addPrimitive(
+    gp_closing,
+    [IMAGE],
+    IMAGE
+)
+
+pset.addPrimitive(
+    gp_convolution,
+    [IMAGE],
+    IMAGE
+)
+
+# Operadores binarios
+def gp_add(image_a, image_b):
+
+    return clip_image(
+        image_a + image_b
+    )
+
+
+def gp_subtract(image_a, image_b):
+
+    return clip_image(
+        image_a - image_b
+    )
+
+
+def gp_multiply(image_a, image_b):
+
+    return clip_image(
+        (image_a * image_b) / 255.0
+    )
+
+pset.addPrimitive(
+    gp_add,
+    [IMAGE, IMAGE],
+    IMAGE
+)
+
+pset.addPrimitive(
+    gp_subtract,
+    [IMAGE, IMAGE],
+    IMAGE
+)
+
+pset.addPrimitive(
+    gp_multiply,
+    [IMAGE, IMAGE],
+    IMAGE
+)
+
+# Se genera el individuo
+toolbox = base.Toolbox()
+
+toolbox.register(
+    "expr",
+    gp.genHalfAndHalf,
+    pset=pset,
+    min_=1,
+    max_=3
+)
+
+toolbox.register(
+    "individual",
+    tools.initIterate,
+    creator.Individual,
+    toolbox.expr
+)
+
+toolbox.register(
+    "population",
+    tools.initRepeat,
+    list,
+    toolbox.individual
+)
+
+# Compilar un árbol
+toolbox.register(
+    "compile",
+    gp.compile,
+    pset=pset
+)
+
+individual = toolbox.individual()
+
+print(individual)
+
+func = toolbox.compile(expr=individual)
+
+result = func(random_image)
+
+# FITNESS
+# def evaluate_individual(individual):
+
+#     func = toolbox.compile(
+#         expr=individual
+#     )
+
+#     generated_image = func(random_image)
+
+#     probability = classifier_probability(
+#         generated_image,
+#         target_class=4
+#     )
+
+#     fitness = 1.0 - probability
+
+#     return (fitness,)
+
+
+# # Ciclo
+# current_image = random_image
+
+# for cycle in range(100):
+
+#     # Ejecutar GP
+#     best_image = run_gp(
+#         current_image
+#     )
+
+#     # Clasificar
+#     probability = classifier_probability(
+#         best_image,
+#         target_class=4
+#     )
+
+#     print(
+#         f"Ciclo {cycle}: "
+#         f"P(4) = {probability:.4f}"
+#     )
+
+#     # Criterio de parada
+#     if probability >= 0.9:
+#         break
+
+#     # La salida se convierte
+#     # en la entrada del siguiente ciclo
+#     current_image = best_image
