@@ -229,3 +229,274 @@ gp_state = {
     "target_image": None,
     "target_class": 4
 }
+
+# MSE
+def mse(image_a, image_b):
+
+    image_a = np.asarray(image_a,dtype=np.float32)
+
+    image_b = np.asarray(image_b,dtype=np.float32)
+
+    return float(np.mean((image_a - image_b) ** 2))
+
+# Clasificador
+def classifier_probability(image,classifier,target_class=1,preprocess=None):
+    """
+    Obtiene P(clase objetivo | imagen)
+    utilizando un clasificador compatible
+    con predict_proba().
+    """
+
+    image = np.asarray(image, dtype=np.float32)
+
+    if preprocess is not None:
+        X = preprocess(image)
+    else:
+        X = image.reshape( 1, -1)
+
+    probabilities = classifier.predict_proba(X)
+    classes = classifier.classes_
+    class_index = np.where(
+        classes == target_class
+    )[0]
+
+    if len(class_index) == 0:
+
+        raise ValueError(
+            f"La clase {target_class} "
+            "no existe en classifier.classes_."
+        )
+
+    return float(
+        probabilities[
+            0,
+            class_index[0]
+        ]
+    )
+
+
+# Terminales faltantes:
+
+# Imagen de entrada
+pset.addTerminal(gp_state["input_image"], np.ndarray)
+
+# Constantes float para parámetros geométricos
+float_constants = [0.0, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0]
+
+for value in float_constants:
+    pset.addTerminal(value, float)
+
+print("Primitivas:")
+for type_, primitives in pset.primitives.items():
+    print(type_, len(primitives))
+
+print("\nTerminales:")
+for type_, terminals in pset.terminals.items():
+    print(type_, len(terminals))
+
+
+
+def generate_typed(pset, min_, max_, type_=None):
+
+    if type_ is None:
+        type_ = pset.ret
+
+    height = random.randint(min_, max_)
+    expr = []
+    stack = [(0, type_)]
+    while stack:
+        depth, current_type = stack.pop()
+        # --------------------------------------------------
+        # FLOAT: siempre debe ser un terminal
+        # --------------------------------------------------
+        if current_type is FLOAT:
+            terminal = random.choice(
+                pset.terminals[FLOAT]
+            )
+            if isinstance(terminal, gp.MetaEphemeral):
+                terminal = terminal()
+            expr.append(terminal)
+            continue
+        # --------------------------------------------------
+        # Profundidad máxima: utilizar terminal
+        # --------------------------------------------------
+        if depth == height:
+            terminal = random.choice(
+                pset.terminals[current_type]
+            )
+            if isinstance(terminal, gp.MetaEphemeral):
+                terminal = terminal()
+            expr.append(terminal)
+            continue
+        # --------------------------------------------------
+        # Antes de min_depth: utilizar primitiva
+        # --------------------------------------------------
+        if depth < min_:
+            primitive = random.choice(
+                pset.primitives[current_type]
+            )
+            expr.append(primitive)
+            for arg_type in reversed(primitive.args):
+                stack.append(
+                    (depth + 1, arg_type)
+                )
+            continue
+        # --------------------------------------------------
+        # Entre min_depth y max_depth:
+        # terminal o primitiva
+        # --------------------------------------------------
+        if random.random() < 0.5:
+            terminal = random.choice(
+                pset.terminals[current_type]
+            )
+            if isinstance(terminal, gp.MetaEphemeral):
+                terminal = terminal()
+            expr.append(terminal)
+        else:
+            primitive = random.choice(
+                pset.primitives[current_type]
+            )
+            expr.append(primitive)
+            for arg_type in reversed(primitive.args):
+                stack.append(
+                    (depth + 1, arg_type)
+                )
+    return expr
+
+
+
+gp_state["input_image"]
+
+def evaluate_individual(individual):
+    input_image = gp_state["input_image"]
+    target_image = gp_state["target_image"]
+    func = toolbox.compile(expr=individual)
+    generated_image = func(input_image)
+    fitness = mse(generated_image, target_image)
+    return (fitness,)
+
+
+# TOOLBOX
+toolbox = base.Toolbox()
+#toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=3) # cambiado por:
+toolbox.register("expr", generate_typed, pset=pset, min_=1, max_=3)
+toolbox.register("individual", tools.initIterate,creator.Individual, toolbox.expr)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+toolbox.register("compile", gp.compile, pset=pset)
+toolbox.register("evaluate", evaluate_individual)
+toolbox.register("select", tools.selTournament, tournsize=3)
+toolbox.register("mate", gp.cxOnePoint)
+toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=8))
+#toolbox.register("expr_mut", gp.genFull, pset=pset, min_=0, max_=2)
+toolbox.register("expr_mut", generate_typed, pset=pset, min_=0, max_=2)
+toolbox.register("mutate",gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
+toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=8))
+
+stats = tools.Statistics(
+    lambda individual:
+        individual.fitness.values[0]
+)
+
+stats.register("min", np.min)
+stats.register("avg", np.mean)
+stats.register("max", np.max)
+
+hall_of_fame = tools.HallOfFame(1)
+
+target_class = 1
+
+target_images = X_train[y_train == target_class]
+
+target_image = (target_images[0].astype(np.float32))
+
+# Imagen aletoria
+random_image = np.random.uniform( 0, 255, size=(28, 28)).astype(np.float32)
+
+# Se configura el estado
+gp_state["input_image"] = random_image
+gp_state["target_image"] = target_image
+gp_state["target_class"] = target_class
+
+# Primeraa prueba
+individual = toolbox.individual()
+
+print(individual)
+print("Altura:", individual.height)
+print("Nodos:", len(individual))
+
+fitness = toolbox.evaluate(individual)
+
+print("Fitness:", fitness)
+
+print("\nTipo de cada nodo:")
+
+for node in individual:
+
+    print(
+        node,
+        "->",
+        getattr(node, "ret", type(node))
+    )
+
+
+
+# print("Ultimaa prueba")
+for i in range(10):
+
+    individual = toolbox.individual()
+
+    print(f"\nIndividuo {i+1}:")
+    print(individual)
+
+    print("Altura:", individual.height)
+    print("Nodos:", len(individual))
+
+    fitness = toolbox.evaluate(individual)
+
+    print("Fitness:", fitness)
+
+# Ejecutar el GP
+# population = toolbox.population(
+#     n=50
+# )
+
+# result_population, logbook = algorithms.eaSimple(
+#     population,
+#     toolbox,
+#     cxpb=0.5,
+#     mutpb=0.2,
+#     ngen=30,
+#     stats=stats,
+#     halloffame=hall_of_fame,
+#     verbose=True
+# )
+
+# best_individual = hall_of_fame[0]
+
+# print("\nMejor individuo:")
+# print(best_individual)
+# print("\nFitness:", best_individual.fitness.values[0])
+# best_function = toolbox.compile(expr=best_individual)
+# best_image = best_function(gp_state["input_image"])
+
+# print("\nImagen generada:")
+# print( "min =", best_image.min())
+# print( "max =", best_image.max())
+# print("mean =", best_image.mean())
+# print("MSE =", mse(best_image, gp_state["target_image"]))
+
+# # Visualizar resultado
+# fig, axes = plt.subplots( 1, 3, figsize=(10, 4))
+
+# axes[0].imshow(gp_state["input_image"],cmap="gray",vmin=0, vmax=255)
+# axes[0].set_title("Entrada")
+# axes[1].imshow(best_image, cmap="gray", vmin=0, vmax=255)
+# axes[1].set_title("Generada")
+# axes[2].imshow(gp_state["target_image"], cmap="gray", vmin=0, vmax=255)
+# axes[2].set_title("Objetivo")
+
+# for ax in axes:
+#     ax.axis("off")
+
+# plt.tight_layout()
+# plt.show()
