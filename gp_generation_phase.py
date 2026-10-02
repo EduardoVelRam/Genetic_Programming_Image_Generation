@@ -21,6 +21,8 @@ X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
 
+targetn = 0  # número por generar
+
 # Terminaales geométricas
 POINT = create_point()
 LINE_H = create_horizontal_line()
@@ -48,16 +50,16 @@ geometric_terminals = {
     "RECTANGLE": RECTANGLE
 }
 
-fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
+# fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
 
-for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
+# for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
 
-    ax.imshow(image, cmap="gray", vmin=0, vmax=255)
-    ax.set_title(name)
-    ax.axis("off")
+#     ax.imshow(image, cmap="gray", vmin=0, vmax=255)
+#     ax.set_title(name)
+#     ax.axis("off")
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 # Primitivas geométricas paramétricas
 # Círculo
@@ -129,8 +131,8 @@ average_kernel = (
 def gp_erosion(image):
     return clip_image(erosion(image, footprint=selem))
 
-def gp_dilation(image):
-    return clip_image(dilation(image,footprint=selem))
+# def gp_dilation(image):
+#     return clip_image(dilation(image,footprint=selem))
 
 def debug_image(name, image):
     print(f"\n[{name}]")
@@ -195,13 +197,13 @@ pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="RECTA
 
 # PARÁMETROS EVOLUTIVOS
 pset.addEphemeralConstant("ANGLE", lambda: random.uniform(-np.pi, np.pi), FLOAT)
-pset.addEphemeralConstant("LENGTH",lambda: random.uniform(2.0, 28.0),FLOAT)
-pset.addEphemeralConstant("THICKNESS",lambda: random.uniform(1.0,6.0), FLOAT)
-pset.addEphemeralConstant("RADIUS",lambda: random.uniform(1.0,14.0),FLOAT)
-pset.addEphemeralConstant("X",lambda: random.uniform(0.0,27.0),FLOAT)
-pset.addEphemeralConstant("Y", lambda: random.uniform(0.0,27.0),FLOAT)
-pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,28.0),FLOAT)
-pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,28.0),FLOAT)
+pset.addEphemeralConstant("LENGTH",lambda: random.uniform(2.0, 14.0),FLOAT) # antes 2 - 28
+pset.addEphemeralConstant("THICKNESS",lambda: random.uniform(1.0,4.0), FLOAT) # antes 1 - 4
+pset.addEphemeralConstant("RADIUS",lambda: random.uniform(1.0,7.0),FLOAT) # antes 1 - 14
+pset.addEphemeralConstant("X",lambda: random.uniform(0.0,15.0),FLOAT) # antes 0 - 27
+pset.addEphemeralConstant("Y", lambda: random.uniform(0.0,15.0),FLOAT) # antes 0 - 27
+pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,14.0),FLOAT) # antes 2 - 28
+pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,14.0),FLOAT) # antes 2 - 28
 
 # Operadores de la imagen
 pset.addPrimitive(gp_erosion, [IMAGE], IMAGE)
@@ -224,23 +226,21 @@ if not hasattr(creator, "FitnessMin"):
 if not hasattr(creator, "Individual"):
     creator.create("Individual", gp.PrimitiveTree,fitness=creator.FitnessMin)
 
+
 gp_state = {
     "input_image": None,
     "target_image": None,
-    "target_class": 4
+    "target_class": targetn
 }
 
 # MSE
 def mse(image_a, image_b):
-
     image_a = np.asarray(image_a,dtype=np.float32)
-
     image_b = np.asarray(image_b,dtype=np.float32)
-
     return float(np.mean((image_a - image_b) ** 2))
 
 # Clasificador
-def classifier_probability(image,classifier,target_class=1,preprocess=None):
+def classifier_probability(image,classifier,target_class=targetn,preprocess=None):
     """
     Obtiene P(clase objetivo | imagen)
     utilizando un clasificador compatible
@@ -276,12 +276,11 @@ def classifier_probability(image,classifier,target_class=1,preprocess=None):
 
 
 # Terminales faltantes:
-
 # Imagen de entrada
-pset.addTerminal(gp_state["input_image"], np.ndarray)
+# pset.addTerminal(gp_state["input_image"], np.ndarray)                                # La imagen como input está dando problemas
 
 # Constantes float para parámetros geométricos
-float_constants = [0.0, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0]
+float_constants = [0.0, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0, 14.0] #, 16.0, 20.0, 24.0, 27.0]
 
 for value in float_constants:
     pset.addTerminal(value, float)
@@ -403,7 +402,7 @@ stats.register("max", np.max)
 
 hall_of_fame = tools.HallOfFame(1)
 
-target_class = 1
+target_class = targetn
 
 target_images = X_train[y_train == target_class]
 
@@ -431,14 +430,11 @@ print("Fitness:", fitness)
 print("\nTipo de cada nodo:")
 
 for node in individual:
-
     print(
         node,
         "->",
         getattr(node, "ret", type(node))
     )
-
-
 
 # print("Ultimaa prueba")
 for i in range(10):
@@ -455,48 +451,58 @@ for i in range(10):
 
     print("Fitness:", fitness)
 
+
+# print("\n=== TERMINALES IMAGE ===")
+
+# for terminal in pset.terminals[IMAGE]:
+
+#     print(
+#         terminal.name,
+#         type(terminal.value)
+#     )
+
 # Ejecutar el GP
-# population = toolbox.population(
-#     n=50
-# )
+population = toolbox.population(
+    n=50
+)
 
-# result_population, logbook = algorithms.eaSimple(
-#     population,
-#     toolbox,
-#     cxpb=0.5,
-#     mutpb=0.2,
-#     ngen=30,
-#     stats=stats,
-#     halloffame=hall_of_fame,
-#     verbose=True
-# )
+result_population, logbook = algorithms.eaSimple(
+    population,
+    toolbox,
+    cxpb=0.5,
+    mutpb=0.2,
+    ngen=30,
+    stats=stats,
+    halloffame=hall_of_fame,
+    verbose=True
+)
 
-# best_individual = hall_of_fame[0]
+best_individual = hall_of_fame[0]
 
-# print("\nMejor individuo:")
-# print(best_individual)
-# print("\nFitness:", best_individual.fitness.values[0])
-# best_function = toolbox.compile(expr=best_individual)
-# best_image = best_function(gp_state["input_image"])
+print("\nMejor individuo:")
+print(best_individual)
+print("\nFitness:", best_individual.fitness.values[0])
+best_function = toolbox.compile(expr=best_individual)
+best_image = best_function(gp_state["input_image"])
 
-# print("\nImagen generada:")
-# print( "min =", best_image.min())
-# print( "max =", best_image.max())
-# print("mean =", best_image.mean())
-# print("MSE =", mse(best_image, gp_state["target_image"]))
+print("\nImagen generada:")
+print( "min =", best_image.min())
+print( "max =", best_image.max())
+print("mean =", best_image.mean())
+print("MSE =", mse(best_image, gp_state["target_image"]))
 
-# # Visualizar resultado
-# fig, axes = plt.subplots( 1, 3, figsize=(10, 4))
+# Visualizar resultado
+fig, axes = plt.subplots( 1, 3, figsize=(10, 4))
 
-# axes[0].imshow(gp_state["input_image"],cmap="gray",vmin=0, vmax=255)
-# axes[0].set_title("Entrada")
-# axes[1].imshow(best_image, cmap="gray", vmin=0, vmax=255)
-# axes[1].set_title("Generada")
-# axes[2].imshow(gp_state["target_image"], cmap="gray", vmin=0, vmax=255)
-# axes[2].set_title("Objetivo")
+axes[0].imshow(gp_state["input_image"],cmap="gray",vmin=0, vmax=255)
+axes[0].set_title("Entrada")
+axes[1].imshow(best_image, cmap="gray", vmin=0, vmax=255)
+axes[1].set_title("Generada")
+axes[2].imshow(gp_state["target_image"], cmap="gray", vmin=0, vmax=255)
+axes[2].set_title("Objetivo")
 
-# for ax in axes:
-#     ax.axis("off")
+for ax in axes:
+    ax.axis("off")
 
-# plt.tight_layout()
-# plt.show()
+plt.tight_layout()
+plt.show()
