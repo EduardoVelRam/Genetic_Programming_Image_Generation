@@ -20,8 +20,7 @@ from deap import base, creator, gp, tools, algorithms
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-
-targetn = 0  # número por generar
+targetn = 0  
 
 # Terminaales geométricas
 POINT = create_point()
@@ -50,16 +49,16 @@ geometric_terminals = {
     "RECTANGLE": RECTANGLE
 }
 
-# fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
+fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
 
-# for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
+for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
 
-#     ax.imshow(image, cmap="gray", vmin=0, vmax=255)
-#     ax.set_title(name)
-#     ax.axis("off")
+    ax.imshow(image, cmap="gray", vmin=0, vmax=255)
+    ax.set_title(name)
+    ax.axis("off")
 
-# plt.tight_layout()
-# plt.show()
+plt.tight_layout()
+plt.show()
 
 # Primitivas geométricas paramétricas
 # Círculo
@@ -197,13 +196,13 @@ pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="RECTA
 
 # PARÁMETROS EVOLUTIVOS
 pset.addEphemeralConstant("ANGLE", lambda: random.uniform(-np.pi, np.pi), FLOAT)
-pset.addEphemeralConstant("LENGTH",lambda: random.uniform(2.0, 14.0),FLOAT) # antes 2 - 28
-pset.addEphemeralConstant("THICKNESS",lambda: random.uniform(1.0,4.0), FLOAT) # antes 1 - 4
-pset.addEphemeralConstant("RADIUS",lambda: random.uniform(1.0,7.0),FLOAT) # antes 1 - 14
-pset.addEphemeralConstant("X",lambda: random.uniform(0.0,15.0),FLOAT) # antes 0 - 27
-pset.addEphemeralConstant("Y", lambda: random.uniform(0.0,15.0),FLOAT) # antes 0 - 27
-pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,14.0),FLOAT) # antes 2 - 28
-pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,14.0),FLOAT) # antes 2 - 28
+pset.addEphemeralConstant("LENGTH",lambda: random.uniform(2.0, 28.0),FLOAT) # antes 2 - 28 -> 2 - 14
+pset.addEphemeralConstant("THICKNESS",lambda: random.uniform(1.0,4.0), FLOAT) # antes 1 - 4 -> 1 - 4
+pset.addEphemeralConstant("RADIUS",lambda: random.uniform(1.0,14.0),FLOAT) # antes 1 - 14 -> 1 - 7
+pset.addEphemeralConstant("X",lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
+pset.addEphemeralConstant("Y", lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
+pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
+pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 
 # Operadores de la imagen
 pset.addPrimitive(gp_erosion, [IMAGE], IMAGE)
@@ -216,8 +215,6 @@ pset.addPrimitive(gp_subtract, [IMAGE, IMAGE], IMAGE)
 pset.addPrimitive(gp_multiply, [IMAGE, IMAGE], IMAGE)
 
 # Comprobar conjuntos de primitivas
-print("Aquí viene lo bueno")
-print(pset)
 
 # Creator
 if not hasattr(creator, "FitnessMin"):
@@ -280,21 +277,21 @@ def classifier_probability(image,classifier,target_class=targetn,preprocess=None
 # pset.addTerminal(gp_state["input_image"], np.ndarray)                                # La imagen como input está dando problemas
 
 # Constantes float para parámetros geométricos
-float_constants = [0.0, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0, 14.0] #, 16.0, 20.0, 24.0, 27.0]
+float_constants = [0.0, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0]
 
 for value in float_constants:
     pset.addTerminal(value, float)
 
-print("Primitivas:")
-for type_, primitives in pset.primitives.items():
-    print(type_, len(primitives))
+# print("Primitivas:")
+# for type_, primitives in pset.primitives.items():
+#     print(type_, len(primitives))
 
-print("\nTerminales:")
-for type_, terminals in pset.terminals.items():
-    print(type_, len(terminals))
+# print("\nTerminales:")
+# for type_, terminals in pset.terminals.items():
+#     print(type_, len(terminals))
 
 
-
+# Para solucionar el tema de que las terminales de tipo FLOAT no se generen correctamente, se implementa una función personalizada para generar individuos con tipos específicos.
 def generate_typed(pset, min_, max_, type_=None):
 
     if type_ is None:
@@ -362,9 +359,8 @@ def generate_typed(pset, min_, max_, type_=None):
                 )
     return expr
 
-
-
-gp_state["input_image"]
+# Evaluación de individuos
+gp_state["input_image"] 
 
 def evaluate_individual(individual):
     input_image = gp_state["input_image"]
@@ -419,37 +415,32 @@ gp_state["target_class"] = target_class
 # Primeraa prueba
 individual = toolbox.individual()
 
-print(individual)
-print("Altura:", individual.height)
-print("Nodos:", len(individual))
+# print(individual)
+# print("Altura:", individual.height)
+# print("Nodos:", len(individual))
 
-fitness = toolbox.evaluate(individual)
+# fitness = toolbox.evaluate(individual)
 
-print("Fitness:", fitness)
+# print("Fitness:", fitness)
 
-print("\nTipo de cada nodo:")
+# print("\nTipo de cada nodo:")
 
-for node in individual:
-    print(
-        node,
-        "->",
-        getattr(node, "ret", type(node))
-    )
+# for node in individual:
+#     print(
+#         node,
+#         "->",
+#         getattr(node, "ret", type(node))
+#     )
 
 # print("Ultimaa prueba")
 for i in range(10):
-
     individual = toolbox.individual()
-
-    print(f"\nIndividuo {i+1}:")
-    print(individual)
-
-    print("Altura:", individual.height)
-    print("Nodos:", len(individual))
-
+    # print(f"\nIndividuo {i+1}:")
+    # print(individual)
+    # print("Altura:", individual.height)
+    # print("Nodos:", len(individual))
     fitness = toolbox.evaluate(individual)
-
-    print("Fitness:", fitness)
+    # print("Fitness:", fitness)
 
 
 # print("\n=== TERMINALES IMAGE ===")
