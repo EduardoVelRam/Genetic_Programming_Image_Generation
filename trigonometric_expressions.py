@@ -84,6 +84,22 @@ def field_to_image(field):
     ) * 255.0
     return image.astype(np.float32)
 
+X, Y, Z = create_coordinate_grid(28)
+
+fig, ax = plt.subplots(1, 3, figsize=(9, 3))
+
+ax[0].imshow(X, cmap="gray")
+ax[0].set_title("X")
+
+ax[1].imshow(Y, cmap="gray")
+ax[1].set_title("Y")
+
+ax[2].imshow(Z, cmap="gray")
+ax[2].set_title("Z")
+
+plt.tight_layout()
+plt.show()
+
 
 # Mostrar las matrices
 #print("X_GRID:")
@@ -95,39 +111,39 @@ def field_to_image(field):
 #print("\nZ_GRID:")
 #print(Z_GRID)
 
-fig = plt.figure(figsize=(8, 6))
-ax = fig.add_subplot(111, projection="3d")
+# fig = plt.figure(figsize=(8, 6))
+# ax = fig.add_subplot(111, projection="3d")
 
-ax.plot_surface(
-    X_GRID,
-    Y_GRID,
-    Z_GRID,
-    cmap="viridis",
-    edgecolor="none"
-)
+# ax.plot_surface(
+#     X_GRID,
+#     Y_GRID,
+#     Z_GRID,
+#     cmap="viridis",
+#     edgecolor="none"
+# )
 
-ax.set_xlabel("X")
-ax.set_ylabel("Y")
-ax.set_zlabel("Z")
-ax.set_title(r"$Z = \sqrt{X^2 + Y^2}$")
+# ax.set_xlabel("X")
+# ax.set_ylabel("Y")
+# ax.set_zlabel("Z")
+# ax.set_title(r"$Z = \sqrt{X^2 + Y^2}$")
 
 #plt.show()
 
-fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+# fig, axes = plt.subplots(1, 3, figsize=(12, 4))
 
-axes[0].imshow(X_GRID, cmap="gray")
-axes[0].set_title("X")
-axes[0].axis("off")
+# axes[0].imshow(X_GRID, cmap="gray")
+# axes[0].set_title("X")
+# axes[0].axis("off")
 
-axes[1].imshow(Y_GRID, cmap="gray")
-axes[1].set_title("Y")
-axes[1].axis("off")
+# axes[1].imshow(Y_GRID, cmap="gray")
+# axes[1].set_title("Y")
+# axes[1].axis("off")
 
-axes[2].imshow(Z_GRID, cmap="gray")
-axes[2].set_title(r"$Z = \sqrt{X^2 + Y^2}$")
-axes[2].axis("off")
+# axes[2].imshow(Z_GRID, cmap="gray")
+# axes[2].set_title(r"$Z = \sqrt{X^2 + Y^2}$")
+# axes[2].axis("off")
 
-plt.tight_layout()
+# plt.tight_layout()
 #plt.show()
 
 print("Todo bien hasta aquí")
