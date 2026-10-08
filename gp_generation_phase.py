@@ -2,6 +2,11 @@ from geometric_images import (
     clip_image, create_point, create_horizontal_line, create_vertical_line, create_circle, 
     create_diagonal_line, create_rectangle, create_square, IMAGE, FLOAT)
 from import_data import load_mnist, mnist_path
+from geometric_primitives_gp import gp_circle, gp_line, gp_rectangle
+from trigonometric_expressions import (
+    field_to_image, gp_sin, gp_cos, gp_tan, X_GRID, Y_GRID, Z_GRID, FIELD, field_sin, 
+    field_cos, field_tan, field_add, field_subtract, field_multiply, 
+    field_scale, field_add_constant, field_divide, create_coordinate_grid)
 import operator
 import random
 import numpy as np
@@ -20,7 +25,7 @@ from deap import base, creator, gp, tools, algorithms
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-targetn = 0  
+targetn = 2
 
 # Terminaales geométricas
 POINT = create_point()
@@ -32,106 +37,20 @@ CIRCLE = create_circle()
 SQUARE = create_square()
 RECTANGLE = create_rectangle(width=16,height=10)
 
-# Verificación de que son matrices
-# print(type(CIRCLE))
-# print(CIRCLE.shape)
-# print(CIRCLE.dtype)
-
-# Visualizar las terminales
-geometric_terminals = {
-    "POINT": POINT,
-    "LINE_H": LINE_H,
-    "LINE_V": LINE_V,
-    "LINE_D1": LINE_D1,
-    "LINE_D2": LINE_D2,
-    "CIRCLE": CIRCLE,
-    "SQUARE": SQUARE,
-    "RECTANGLE": RECTANGLE
-}
-
-fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
-
-for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
-
-    ax.imshow(image, cmap="gray", vmin=0, vmax=255)
-    ax.set_title(name)
-    ax.axis("off")
-
-plt.tight_layout()
-plt.show()
-
-# Primitivas geométricas paramétricas
-# Círculo
-def gp_circle(radius, x, y):
-    radius = float(np.clip(radius, 1.0, 14.0))
-    x = float(np.clip(x,0.0,27.0))
-    y = float(np.clip(y,0.0,27.0))
-    return create_circle( size=28,radius=radius,x=x, y=y)
-
-# Línea
-def gp_line(angle,length,thickness):
-    angle = float(angle)
-    length = float(np.clip( length, 2.0, 28.0))
-    thickness = float( np.clip( thickness, 1.0, 6.0) )
-    image = np.zeros((28, 28), dtype=np.float32)
-    center = 13.5
-    half_length = length / 2.0
-    dx = np.cos(angle) * half_length
-    dy = np.sin(angle) * half_length
-    x0 = center - dx
-    y0 = center - dy
-    x1 = center + dx
-    y1 = center + dy
-    rr, cc = line(
-        int(round(y0)),
-        int(round(x0)),
-        int(round(y1)),
-        int(round(x1))
-    )
-    image[rr, cc] = 255.0
-
-    if thickness > 1:
-        image = dilation( image,footprint=disk(max(1, int(thickness // 2))))
-
-    return image.astype(np.float32)
-
-# REctángulo
-def gp_rectangle(width, height, x, y):
-    width = float(np.clip(width, 2.0, 28.0))
-    height = float(np.clip(height,2.0,28.0))
-    x = float(np.clip(x,0.0,27.0))
-    y = float(np.clip(y, 0.0,27.0))
-
-    image = np.zeros((28, 28),dtype=np.float32)
-    x0 = int(round(x - width / 2))
-    x1 = int(round(x + width / 2))
-    y0 = int(round(y - height / 2))
-    y1 = int(round(y + height / 2))
-
-    x0 = max(0, x0)
-    x1 = min(28, x1)
-    y0 = max(0, y0)
-    y1 = min(28, y1)
-
-    image[y0:y1, x0:x1] = 255.0
-
-    return image
+# fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
+# for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
+#     ax.imshow(image, cmap="gray", vmin=0, vmax=255)
+#     ax.set_title(name)
+#     ax.axis("off")
+# plt.tight_layout()
+# plt.show()
 
 # OPERADORES MORFOLÓGICOS
 selem = disk(1)
-
-average_kernel = (
-    np.ones(
-        (3, 3),
-        dtype=np.float32
-    ) / 9.0
-)
+average_kernel = (np.ones((3, 3), dtype=np.float32) / 9.0)
 
 def gp_erosion(image):
     return clip_image(erosion(image, footprint=selem))
-
-# def gp_dilation(image):
-#     return clip_image(dilation(image,footprint=selem))
 
 def debug_image(name, image):
     print(f"\n[{name}]")
@@ -171,13 +90,20 @@ def gp_subtract(image_a, image_b):
 def gp_multiply(image_a, image_b):
     return clip_image((image_a * image_b) / 255.0)
 
+# pset = gp.PrimitiveSetTyped(
+#     "MAIN",
+#     [IMAGE],
+#     IMAGE
+# )
+
+# Cambiado para que la imagen de entrada sea un argumento en lugar de una terminal 
 pset = gp.PrimitiveSetTyped(
     "MAIN",
-    [IMAGE],
+    [],
     IMAGE
 )
 
-pset.renameArguments(ARG0="I")
+# pset.renameArguments(ARG0="I")
 
 # Registrar las terminales geométricas
 pset.addTerminal(POINT, IMAGE, name="POINT")
@@ -188,11 +114,26 @@ pset.addTerminal(LINE_D2, IMAGE, name="LINE_D2")
 pset.addTerminal(CIRCLE, IMAGE, name="CIRCLE")
 pset.addTerminal(SQUARE, IMAGE, name="SQUARE")
 pset.addTerminal(RECTANGLE,IMAGE, name="RECTANGLE")
+pset.addTerminal(X_GRID, FIELD, name="X_val")
+pset.addTerminal(Y_GRID, FIELD, name="Y_val")
+pset.addTerminal(Z_GRID, FIELD, name="Z_val")
 
 # Prmitivas geométricas paramétricas
 pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="CIRCLE_PARAM")
 pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="LINE_PARAM")
 pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="RECTANGLE_PARAM")
+
+# Primitivas trigonométricas y de campo
+pset.addPrimitive(field_sin, [FIELD], FIELD, name="SIN")
+pset.addPrimitive(field_cos, [FIELD], FIELD, name="COS")
+pset.addPrimitive(field_tan, [FIELD], FIELD, name="TAN")
+pset.addPrimitive(field_add, [FIELD, FIELD], FIELD, name="FADD")
+pset.addPrimitive(field_subtract, [FIELD, FIELD], FIELD, name="FSUB")
+pset.addPrimitive(field_multiply, [FIELD, FIELD], FIELD, name="FMUL")
+pset.addPrimitive(field_divide, [FIELD, FIELD], FIELD, name="FDIV")
+pset.addPrimitive(field_to_image, [FIELD], IMAGE, name="TO_IMAGE")
+pset.addPrimitive(field_scale, [FIELD, FLOAT], FIELD, name="SCALE")
+pset.addPrimitive(field_add_constant, [FIELD, FLOAT], FIELD, name="OFFSET")
 
 # PARÁMETROS EVOLUTIVOS
 pset.addEphemeralConstant("ANGLE", lambda: random.uniform(-np.pi, np.pi), FLOAT)
@@ -203,6 +144,7 @@ pset.addEphemeralConstant("X",lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 
 pset.addEphemeralConstant("Y", lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
 pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
+pset.addEphemeralConstant("CONST", lambda: random.uniform(-5.0, 5.0), FLOAT)
 
 # Operadores de la imagen
 pset.addPrimitive(gp_erosion, [IMAGE], IMAGE)
@@ -225,7 +167,7 @@ if not hasattr(creator, "Individual"):
 
 
 gp_state = {
-    "input_image": None,
+    #"input_image": None,
     "target_image": None,
     "target_class": targetn
 }
@@ -236,137 +178,80 @@ def mse(image_a, image_b):
     image_b = np.asarray(image_b,dtype=np.float32)
     return float(np.mean((image_a - image_b) ** 2))
 
-# Clasificador
-def classifier_probability(image,classifier,target_class=targetn,preprocess=None):
-    """
-    Obtiene P(clase objetivo | imagen)
-    utilizando un clasificador compatible
-    con predict_proba().
-    """
-
-    image = np.asarray(image, dtype=np.float32)
-
-    if preprocess is not None:
-        X = preprocess(image)
-    else:
-        X = image.reshape( 1, -1)
-
-    probabilities = classifier.predict_proba(X)
-    classes = classifier.classes_
-    class_index = np.where(
-        classes == target_class
-    )[0]
-
-    if len(class_index) == 0:
-
-        raise ValueError(
-            f"La clase {target_class} "
-            "no existe en classifier.classes_."
-        )
-
-    return float(
-        probabilities[
-            0,
-            class_index[0]
-        ]
-    )
 
 
 # Terminales faltantes:
 # Imagen de entrada
 # pset.addTerminal(gp_state["input_image"], np.ndarray)                                # La imagen como input está dando problemas
 
-# Constantes float para parámetros geométricos
-float_constants = [0.0, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0]
+# # Constantes float para parámetros geométricos
+float_constants = [-4.0, -3.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0, np.pi, 2*np.pi]
 
 for value in float_constants:
-    pset.addTerminal(value, float)
-
-# print("Primitivas:")
-# for type_, primitives in pset.primitives.items():
-#     print(type_, len(primitives))
-
-# print("\nTerminales:")
-# for type_, terminals in pset.terminals.items():
-#     print(type_, len(terminals))
+    pset.addTerminal(value, FLOAT)
 
 
 # Para solucionar el tema de que las terminales de tipo FLOAT no se generen correctamente, se implementa una función personalizada para generar individuos con tipos específicos.
 def generate_typed(pset, min_, max_, type_=None):
-
     if type_ is None:
         type_ = pset.ret
-
     height = random.randint(min_, max_)
     expr = []
     stack = [(0, type_)]
     while stack:
         depth, current_type = stack.pop()
-        # --------------------------------------------------
-        # FLOAT: siempre debe ser un terminal
-        # --------------------------------------------------
         if current_type is FLOAT:
-            terminal = random.choice(
-                pset.terminals[FLOAT]
-            )
+            terminal = random.choice(pset.terminals[FLOAT])
             if isinstance(terminal, gp.MetaEphemeral):
                 terminal = terminal()
             expr.append(terminal)
             continue
-        # --------------------------------------------------
-        # Profundidad máxima: utilizar terminal
-        # --------------------------------------------------
         if depth == height:
-            terminal = random.choice(
-                pset.terminals[current_type]
-            )
+            terminal = random.choice(pset.terminals[current_type])
             if isinstance(terminal, gp.MetaEphemeral):
                 terminal = terminal()
             expr.append(terminal)
             continue
-        # --------------------------------------------------
-        # Antes de min_depth: utilizar primitiva
-        # --------------------------------------------------
         if depth < min_:
-            primitive = random.choice(
-                pset.primitives[current_type]
-            )
+            primitive = random.choice(pset.primitives[current_type])
             expr.append(primitive)
             for arg_type in reversed(primitive.args):
-                stack.append(
-                    (depth + 1, arg_type)
-                )
+                stack.append((depth + 1, arg_type))
             continue
-        # --------------------------------------------------
-        # Entre min_depth y max_depth:
-        # terminal o primitiva
-        # --------------------------------------------------
         if random.random() < 0.5:
-            terminal = random.choice(
-                pset.terminals[current_type]
-            )
+            terminal = random.choice(pset.terminals[current_type])
             if isinstance(terminal, gp.MetaEphemeral):
                 terminal = terminal()
             expr.append(terminal)
         else:
-            primitive = random.choice(
-                pset.primitives[current_type]
-            )
+            primitive = random.choice(pset.primitives[current_type])
             expr.append(primitive)
             for arg_type in reversed(primitive.args):
-                stack.append(
-                    (depth + 1, arg_type)
-                )
+                stack.append((depth + 1, arg_type))
     return expr
 
 # Evaluación de individuos
-gp_state["input_image"] 
+# gp_state["input_image"] 
+
+# Antes
+# def evaluate_individual(individual):
+#     input_image = gp_state["input_image"]
+#     target_image = gp_state["target_image"]
+#     func = toolbox.compile(expr=individual)
+#     generated_image = func(input_image)
+#     fitness = mse(generated_image, target_image)
+#     return (fitness,)
+
+# expr = gp.PrimitiveTree.from_string(
+#     "TO_IMAGE(FADD(SIN(X),COS(Y)))",
+#     pset
+# )
 
 def evaluate_individual(individual):
-    input_image = gp_state["input_image"]
     target_image = gp_state["target_image"]
+    # func = toolbox.compile(expr=expr)
     func = toolbox.compile(expr=individual)
-    generated_image = func(input_image)
+    generated_image = func
     fitness = mse(generated_image, target_image)
     return (fitness,)
 
@@ -402,13 +287,14 @@ target_class = targetn
 
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[0].astype(np.float32))
+target_image = (target_images[3].astype(np.float32))
 
 # Imagen aletoria
+# np.random.seed(RANDOM_SEED)
 random_image = np.random.uniform( 0, 255, size=(28, 28)).astype(np.float32)
 
 # Se configura el estado
-gp_state["input_image"] = random_image
+# gp_state["input_image"] = random_image
 gp_state["target_image"] = target_image
 gp_state["target_class"] = target_class
 
@@ -432,7 +318,6 @@ individual = toolbox.individual()
 #         getattr(node, "ret", type(node))
 #     )
 
-# print("Ultimaa prueba")
 for i in range(10):
     individual = toolbox.individual()
     # print(f"\nIndividuo {i+1}:")
@@ -443,15 +328,6 @@ for i in range(10):
     # print("Fitness:", fitness)
 
 
-# print("\n=== TERMINALES IMAGE ===")
-
-# for terminal in pset.terminals[IMAGE]:
-
-#     print(
-#         terminal.name,
-#         type(terminal.value)
-#     )
-
 # Ejecutar el GP
 population = toolbox.population(
     n=50
@@ -461,12 +337,14 @@ result_population, logbook = algorithms.eaSimple(
     population,
     toolbox,
     cxpb=0.5,
-    mutpb=0.2,
-    ngen=30,
+    mutpb=0.6,
+    ngen=80,
     stats=stats,
     halloffame=hall_of_fame,
     verbose=True
 )
+
+
 
 best_individual = hall_of_fame[0]
 
@@ -474,7 +352,9 @@ print("\nMejor individuo:")
 print(best_individual)
 print("\nFitness:", best_individual.fitness.values[0])
 best_function = toolbox.compile(expr=best_individual)
-best_image = best_function(gp_state["input_image"])
+best_image = best_function #(gp_state["input_image"])
+
+
 
 print("\nImagen generada:")
 print( "min =", best_image.min())
@@ -485,11 +365,16 @@ print("MSE =", mse(best_image, gp_state["target_image"]))
 # Visualizar resultado
 fig, axes = plt.subplots( 1, 3, figsize=(10, 4))
 
-axes[0].imshow(gp_state["input_image"],cmap="gray",vmin=0, vmax=255)
-axes[0].set_title("Entrada")
-axes[1].imshow(best_image, cmap="gray", vmin=0, vmax=255)
-axes[1].set_title("Generada")
-axes[2].imshow(gp_state["target_image"], cmap="gray", vmin=0, vmax=255)
+axes[0].imshow(best_image,cmap="gray",vmin=0, vmax=255)
+axes[0].set_title("Generada")
+
+image = np.where(best_image > best_image.mean(), 255, 0).astype(np.float32)
+axes[1].imshow(image, cmap="gray", vmin=0, vmax=255)
+axes[1].set_title("Normalizada")
+
+imaget = np.where(gp_state["target_image"] > gp_state["target_image"].mean(), 255, 0).astype(np.float32)
+axes[2].imshow(imaget, cmap="gray", vmin=0, vmax=255)
+# axes[2].imshow(gp_state["target_image"], cmap="gray", vmin=0, vmax=255)
 axes[2].set_title("Objetivo")
 
 for ax in axes:
