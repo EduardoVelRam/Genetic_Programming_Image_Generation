@@ -25,7 +25,12 @@ from deap import base, creator, gp, tools, algorithms
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-targetn = 2
+targetn = 0
+target_class = targetn
+generations = 40
+target_images = X_train[y_train == target_class]
+
+target_image = (target_images[0].astype(np.float32))
 
 # Terminaales geométricas
 POINT = create_point()
@@ -272,6 +277,9 @@ toolbox.register("expr_mut", generate_typed, pset=pset, min_=0, max_=2)
 toolbox.register("mutate",gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=8))
 
+
+ELITE_SIZE = 2
+
 stats = tools.Statistics(
     lambda individual:
         individual.fitness.values[0]
@@ -283,68 +291,113 @@ stats.register("max", np.max)
 
 hall_of_fame = tools.HallOfFame(1)
 
-target_class = targetn
-
-target_images = X_train[y_train == target_class]
-
-target_image = (target_images[3].astype(np.float32))
 
 # Imagen aletoria
 # np.random.seed(RANDOM_SEED)
-random_image = np.random.uniform( 0, 255, size=(28, 28)).astype(np.float32)
+# random_image = np.random.uniform( 0, 255, size=(28, 28)).astype(np.float32)
 
 # Se configura el estado
 # gp_state["input_image"] = random_image
 gp_state["target_image"] = target_image
 gp_state["target_class"] = target_class
 
-# Primeraa prueba
-individual = toolbox.individual()
-
-# print(individual)
-# print("Altura:", individual.height)
-# print("Nodos:", len(individual))
-
-# fitness = toolbox.evaluate(individual)
-
-# print("Fitness:", fitness)
-
-# print("\nTipo de cada nodo:")
-
-# for node in individual:
-#     print(
-#         node,
-#         "->",
-#         getattr(node, "ret", type(node))
-#     )
-
-for i in range(10):
-    individual = toolbox.individual()
-    # print(f"\nIndividuo {i+1}:")
-    # print(individual)
-    # print("Altura:", individual.height)
-    # print("Nodos:", len(individual))
-    fitness = toolbox.evaluate(individual)
-    # print("Fitness:", fitness)
 
 
 # Ejecutar el GP
 population = toolbox.population(
-    n=50
-)
-
-result_population, logbook = algorithms.eaSimple(
-    population,
-    toolbox,
-    cxpb=0.5,
-    mutpb=0.6,
-    ngen=80,
-    stats=stats,
-    halloffame=hall_of_fame,
-    verbose=True
+    n=80
 )
 
 
+logbook = tools.Logbook()
+logbook.header = [
+    "gen",
+    "nevals",
+    "min",
+    "avg",
+    "max"
+]
+
+# Evaluación inicial
+for individual in population:
+    individual.fitness.values = toolbox.evaluate(individual)
+
+hall_of_fame.update(population)
+
+record = stats.compile(population)
+
+logbook.record(
+    gen=0,
+    nevals=len(population),
+    **record
+)
+
+print(logbook.stream)
+
+cxpb = 0.5
+mutpb = 0.6
+# EVOLUCIÓN
+for generation in range(1, generations+1):
+    # 1. Selección
+    offspring = toolbox.select(population,len(population) - ELITE_SIZE)
+    offspring = algorithms.varAnd(offspring, toolbox, cxpb, mutpb)
+    offspring = list(map(toolbox.clone, offspring))
+
+    # 2. Crossover
+    for child1, child2 in zip(offspring[::2], offspring[1::2]):
+        if random.random() < 0.5:
+            toolbox.mate(child1, child2)
+            del child1.fitness.values
+            del child2.fitness.values
+
+    # 3. Mutación
+    for mutant in offspring:
+        if random.random() < 0.2:
+            toolbox.mutate(mutant)
+            del mutant.fitness.values
+
+    # 4. Evaluación
+    invalid_individuals = [
+        individual
+        for individual in offspring
+        if not individual.fitness.valid
+    ]
+
+    for individual in invalid_individuals:
+        individual.fitness.values = toolbox.evaluate(individual)
+
+    # 5. Elitismo
+    elites = tools.selBest(population, ELITE_SIZE)
+    elites = list(map(toolbox.clone, elites))
+
+    # 6. Nueva generación
+    population = offspring + elites
+
+    # 7. Hall of Fame
+    hall_of_fame.update(population)
+
+    # 8. Estadísticas
+    record = stats.compile(population)
+
+    logbook.record(
+        gen=generation,
+        nevals=len(invalid_individuals),
+        **record
+    )
+
+    print(logbook.stream)
+
+
+# result_population, logbook = algorithms.eaSimple(
+#     population,
+#     toolbox,
+#     cxpb=0.5,
+#     mutpb=0.6,
+#     ngen=80,
+#     stats=stats,
+#     halloffame=hall_of_fame,
+#     verbose=True
+# )
 
 best_individual = hall_of_fame[0]
 
