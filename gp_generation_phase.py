@@ -3,16 +3,16 @@ from geometric_images import (
     create_diagonal_line, create_rectangle, create_square, IMAGE, FLOAT)
 from import_data import load_mnist, mnist_path
 from geometric_primitives_gp import gp_circle, gp_line, gp_rectangle
+from aditional_functions import preprocess_for_knn, classifier_probability
 from trigonometric_expressions import (
     field_to_image, gp_sin, gp_cos, gp_tan, X_GRID, Y_GRID, Z_GRID, FIELD, field_sin, 
     field_cos, field_tan, field_add, field_subtract, field_multiply, 
-    field_scale, field_add_constant, field_divide, create_coordinate_grid)
+    field_scale, field_add_constant, field_divide)
 import operator
 import random
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import convolve
-from skimage.draw import line
 from skimage.morphology import (
     erosion,
     dilation,
@@ -21,16 +21,80 @@ from skimage.morphology import (
     disk
 )
 from deap import base, creator, gp, tools, algorithms
+from pathlib import Path
+import joblib 
+
+class FieldType:
+    pass
+class ImageType:
+    pass
+
+FIELD = FieldType
+IMAGE = ImageType
+
+DEBUG_DIR = Path("debug_fitness_zero")
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+
+# Importar el modelo KNN entrenado
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "knn_mnist.joblib"
+
+if not MODEL_PATH.exists():
+    raise FileNotFoundError(
+        f"No se encontró el modelo KNN: {MODEL_PATH}. "
+        "Ejecutar primero train_knn.py."
+    )
+
+knn1 = joblib.load(MODEL_PATH)
+
+print("Clasificador KNN cargado.")
 
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-targetn = 0
-target_class = targetn
-generations = 40
+target_class = 9    
+generations = 170
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[0].astype(np.float32))
+target_image = (target_images[4].astype(np.float32))
+
+
+def inspect_individual(individual, image, probability, target_class):
+    image = np.asarray(image, dtype=np.float32)
+
+    X = preprocess_for_knn(image)
+    predicted_class = knn1.predict(X)[0]
+
+    print("\n=== INDIVIDUO CON FITNESS CERO ===")
+    #print("Árbol:", individual)
+    #print("Clase objetivo:", target_class)
+    #print("Clase predicha:", predicted_class)
+    #print("Probabilidad objetivo:", probability)
+    #print("Mínimo:", image.min())
+    print("Máximo:", image.max())
+    print("Media:", image.mean())
+    #print("Desviación estándar:", image.std())
+
+    probabilities = knn1.predict_proba(X)[0]
+    print("Probabilidades por clase:", probabilities)
+
+    plt.figure(figsize=(4, 4))
+    plt.imshow(image, cmap="gray", vmin=0, vmax=255)
+    plt.title(
+        f"Objetivo: {target_class} | "
+        f"Predicción: {predicted_class} | "
+        f"P: {probability:.3f}"
+    )
+    plt.axis("off")
+
+    filename = DEBUG_DIR / (
+        f"fitness_zero_{abs(hash(str(individual)))}.png"
+    )
+
+    plt.savefig(filename, bbox_inches="tight", dpi=150)
+    plt.close()
+
+    print("Imagen guardada en:", filename)
 
 # Terminaales geométricas
 POINT = create_point()
@@ -42,6 +106,17 @@ CIRCLE = create_circle()
 SQUARE = create_square()
 RECTANGLE = create_rectangle(width=16,height=10)
 
+# Visualizar las terminales
+# geometric_terminals = {
+#     "POINT": POINT,
+#     "LINE_H": LINE_H,
+#     "LINE_V": LINE_V,
+#     "LINE_D1": LINE_D1,
+#     "LINE_D2": LINE_D2,
+#     "CIRCLE": CIRCLE,
+#     "SQUARE": SQUARE,
+#     "RECTANGLE": RECTANGLE
+# }
 # fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
 # for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
 #     ax.imshow(image, cmap="gray", vmin=0, vmax=255)
@@ -71,7 +146,7 @@ def debug_image(name, image):
     return image
 
 def gp_dilation(image):
-    debug_image("gp_dilation - entrada", image)
+    # debug_image("gp_dilation - entrada", image)
     selem = np.ones((3, 3), dtype=np.uint8)
     result = dilation(image, footprint=selem)
     return clip_image(result)
@@ -93,7 +168,8 @@ def gp_subtract(image_a, image_b):
     return clip_image(image_a - image_b)
 
 def gp_multiply(image_a, image_b):
-    return clip_image((image_a * image_b) / 255.0)
+    result = np.multiply(image_a, image_b)
+    return clip_image(result)
 
 # pset = gp.PrimitiveSetTyped(
 #     "MAIN",
@@ -111,33 +187,35 @@ pset = gp.PrimitiveSetTyped(
 # pset.renameArguments(ARG0="I")
 
 # Registrar las terminales geométricas
-pset.addTerminal(POINT, IMAGE, name="POINT")
-pset.addTerminal(LINE_H,IMAGE, name="LINE_H")
-pset.addTerminal(LINE_V, IMAGE, name="LINE_V")
-pset.addTerminal(LINE_D1, IMAGE, name="LINE_D1")
-pset.addTerminal(LINE_D2, IMAGE, name="LINE_D2")
-pset.addTerminal(CIRCLE, IMAGE, name="CIRCLE")
-pset.addTerminal(SQUARE, IMAGE, name="SQUARE")
-pset.addTerminal(RECTANGLE,IMAGE, name="RECTANGLE")
+pset.addTerminal(POINT, IMAGE, name="Point")
+pset.addTerminal(LINE_H,IMAGE, name="Line_H")
+pset.addTerminal(LINE_V, IMAGE, name="Line_V")
+pset.addTerminal(LINE_D1, IMAGE, name="Line_D1")
+pset.addTerminal(LINE_D2, IMAGE, name="Line_D2")
+pset.addTerminal(CIRCLE, IMAGE, name="Circle")
+pset.addTerminal(SQUARE, IMAGE, name="Square")
+pset.addTerminal(RECTANGLE,IMAGE, name="Rectangle")
 pset.addTerminal(X_GRID, FIELD, name="X_val")
 pset.addTerminal(Y_GRID, FIELD, name="Y_val")
 pset.addTerminal(Z_GRID, FIELD, name="Z_val")
 
 # Prmitivas geométricas paramétricas
-pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="CIRCLE_PARAM")
-pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="LINE_PARAM")
-pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="RECTANGLE_PARAM")
+pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="Circle_Param")
+pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="Line_Param")
+pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Rectangle_Param")
 
 # Primitivas trigonométricas y de campo
-pset.addPrimitive(field_sin, [FIELD], FIELD, name="SIN")
-pset.addPrimitive(field_cos, [FIELD], FIELD, name="COS")
-pset.addPrimitive(field_tan, [FIELD], FIELD, name="TAN")
-pset.addPrimitive(field_add, [FIELD, FIELD], FIELD, name="FADD")
-pset.addPrimitive(field_subtract, [FIELD, FIELD], FIELD, name="FSUB")
-pset.addPrimitive(field_multiply, [FIELD, FIELD], FIELD, name="FMUL")
-pset.addPrimitive(field_divide, [FIELD, FIELD], FIELD, name="FDIV")
-pset.addPrimitive(field_to_image, [FIELD], IMAGE, name="TO_IMAGE")
-pset.addPrimitive(field_scale, [FIELD, FLOAT], FIELD, name="SCALE")
+pset.addPrimitive(field_sin, [FIELD], FIELD, name="Sin")
+pset.addPrimitive(field_cos, [FIELD], FIELD, name="Cos")
+pset.addPrimitive(field_tan, [FIELD], FIELD, name="Tan")
+pset.addPrimitive(np.cos, [FIELD], FIELD, name="Coseno")
+pset.addPrimitive(np.sin, [FIELD], FIELD, name="Seno")
+pset.addPrimitive(field_add, [FIELD, FIELD], FIELD, name="Add")
+pset.addPrimitive(field_subtract, [FIELD, FIELD], FIELD, name="Subtract")
+pset.addPrimitive(field_multiply, [FIELD, FIELD], FIELD, name="Multiply")
+pset.addPrimitive(field_divide, [FIELD, FIELD], FIELD, name="F_Divide")
+pset.addPrimitive(field_to_image, [FIELD], IMAGE, name="F_TO_IMG")
+pset.addPrimitive(field_scale, [FIELD, FLOAT], FIELD, name="Scale")
 pset.addPrimitive(field_add_constant, [FIELD, FLOAT], FIELD, name="OFFSET")
 
 # PARÁMETROS EVOLUTIVOS
@@ -145,18 +223,18 @@ pset.addEphemeralConstant("ANGLE", lambda: random.uniform(-np.pi, np.pi), FLOAT)
 pset.addEphemeralConstant("LENGTH",lambda: random.uniform(2.0, 28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 pset.addEphemeralConstant("THICKNESS",lambda: random.uniform(1.0,4.0), FLOAT) # antes 1 - 4 -> 1 - 4
 pset.addEphemeralConstant("RADIUS",lambda: random.uniform(1.0,14.0),FLOAT) # antes 1 - 14 -> 1 - 7
-pset.addEphemeralConstant("X",lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
-pset.addEphemeralConstant("Y", lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
+pset.addEphemeralConstant("X_coord",lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
+pset.addEphemeralConstant("Y_coord", lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
 pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 pset.addEphemeralConstant("CONST", lambda: random.uniform(-5.0, 5.0), FLOAT)
 
 # Operadores de la imagen
-pset.addPrimitive(gp_erosion, [IMAGE], IMAGE)
-pset.addPrimitive(gp_dilation,[IMAGE], IMAGE)
-pset.addPrimitive(gp_opening, [IMAGE], IMAGE)
-pset.addPrimitive(gp_closing, [IMAGE], IMAGE)
-pset.addPrimitive(gp_convolution,[IMAGE], IMAGE)
+pset.addPrimitive(gp_erosion, [IMAGE], IMAGE, name="gp_erosion")
+pset.addPrimitive(gp_dilation,[IMAGE], IMAGE, name="gp_dilation")
+pset.addPrimitive(gp_opening, [IMAGE], IMAGE, name="gp_opening")
+pset.addPrimitive(gp_closing, [IMAGE], IMAGE, name="gp_closing")
+pset.addPrimitive(gp_convolution,[IMAGE], IMAGE, name="gp_convolution")
 pset.addPrimitive(gp_add,[IMAGE, IMAGE], IMAGE)
 pset.addPrimitive(gp_subtract, [IMAGE, IMAGE], IMAGE)
 pset.addPrimitive(gp_multiply, [IMAGE, IMAGE], IMAGE)
@@ -174,7 +252,7 @@ if not hasattr(creator, "Individual"):
 gp_state = {
     #"input_image": None,
     "target_image": None,
-    "target_class": targetn
+    "target_class": target_class
 }
 
 # MSE
@@ -182,7 +260,6 @@ def mse(image_a, image_b):
     image_a = np.asarray(image_a,dtype=np.float32)
     image_b = np.asarray(image_b,dtype=np.float32)
     return float(np.mean((image_a - image_b) ** 2))
-
 
 
 # Terminales faltantes:
@@ -238,26 +315,29 @@ def generate_typed(pset, min_, max_, type_=None):
 # Evaluación de individuos
 # gp_state["input_image"] 
 
-# Antes
+# Antes con mse
+def evaluate_individual(individual):
+     target_image = gp_state["target_image"]
+     # func = toolbox.compile(expr=expr)
+     func = toolbox.compile(expr=individual)
+     generated_image = func
+     fitness = mse(generated_image, target_image) # puede agregarse un criterio de paro en caso de que el fitness no mejore después de un número determinado de generaciones
+     return (fitness,)
+
 # def evaluate_individual(individual):
-#     input_image = gp_state["input_image"]
-#     target_image = gp_state["target_image"]
-#     func = toolbox.compile(expr=individual)
-#     generated_image = func(input_image)
-#     fitness = mse(generated_image, target_image)
+#     target_class = gp_state["target_class"]
+#     generated_image = toolbox.compile(expr=individual)
+#     probability = classifier_probability(generated_image, classifier=knn1, target_class=target_class) 
+#     fitness = 1.0 - probability
 #     return (fitness,)
 
-# expr = gp.PrimitiveTree.from_string(
-#     "TO_IMAGE(FADD(SIN(X),COS(Y)))",
-#     pset
-# )
-
-def evaluate_individual(individual):
-    target_image = gp_state["target_image"]
-    # func = toolbox.compile(expr=expr)
-    func = toolbox.compile(expr=individual)
-    generated_image = func
-    fitness = mse(generated_image, target_image)
+def evaluate_individual2(individual):
+    target_class = gp_state["target_class"]
+    generated_image = toolbox.compile(expr=individual)
+    probability = classifier_probability(generated_image, classifier=knn1, target_class=target_class)
+    fitness = 1.0 - probability
+    if np.isclose(fitness, 0.0):
+        inspect_individual(individual=individual, image=generated_image, probability=probability, target_class=target_class)
     return (fitness,)
 
 
@@ -305,7 +385,7 @@ gp_state["target_class"] = target_class
 
 # Ejecutar el GP
 population = toolbox.population(
-    n=80
+    n=50
 )
 
 
@@ -408,12 +488,17 @@ best_function = toolbox.compile(expr=best_individual)
 best_image = best_function #(gp_state["input_image"])
 
 
-
-print("\nImagen generada:")
-print( "min =", best_image.min())
-print( "max =", best_image.max())
-print("mean =", best_image.mean())
+# print("\nImagen generada:")
+# print( "min =", best_image.min())
+# print( "max =", best_image.max())
+# print("mean =", best_image.mean())
 print("MSE =", mse(best_image, gp_state["target_image"]))
+
+#black_image = np.zeros((28, 28), dtype=np.float32)
+#X_black = preprocess_for_knn(black_image)
+#print("Predicción:", knn1.predict(X_black)[0])
+#print("Probabilidades:", knn1.predict_proba(X_black)[0])
+#print("Clases:", knn1.classes_)
 
 # Visualizar resultado
 fig, axes = plt.subplots( 1, 3, figsize=(10, 4))
