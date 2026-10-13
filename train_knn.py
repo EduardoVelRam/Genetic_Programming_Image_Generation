@@ -30,9 +30,16 @@ X_test = X_test.astype(np.float32).reshape(
 # ENTRENAMIENTO
 # ============================================================
 
+# knn = KNeighborsClassifier(
+#     n_neighbors=K_NEIGHBORS,
+#     weights="distance",
+#     metric="euclidean",
+#     n_jobs=-1
+# )
+
 knn = KNeighborsClassifier(
-    n_neighbors=K_NEIGHBORS,
-    weights="distance",
+    n_neighbors=15,
+    weights="uniform",
     metric="euclidean",
     n_jobs=-1
 )
