@@ -84,21 +84,53 @@ def field_to_image(field):
     ) * 255.0
     return image.astype(np.float32)
 
-X, Y, Z = create_coordinate_grid(28)
 
-fig, ax = plt.subplots(1, 3, figsize=(9, 3))
 
-ax[0].imshow(X, cmap="gray")
-ax[0].set_title("X")
+# X, Y, Z = create_coordinate_grid(28)
 
-ax[1].imshow(Y, cmap="gray")
-ax[1].set_title("Y")
+# fig, ax = plt.subplots(1, 3, figsize=(9, 3))
 
-ax[2].imshow(Z, cmap="gray")
-ax[2].set_title("Z")
+# ax[0].imshow(X, cmap="gray")
+# ax[0].set_title("X")
 
-plt.tight_layout()
-plt.show()
+# ax[1].imshow(Y, cmap="gray")
+# ax[1].set_title("Y")
+
+# ax[2].imshow(Z, cmap="gray")
+# ax[2].set_title("Z")
+
+# plt.tight_layout()
+# plt.show()
+
+# Imagen sintética basada en la superficie ab
+def field_ab_surface(a, b):
+    X_mesh, Y_mesh = np.meshgrid(
+        np.arange(1, 29, dtype=np.float32),
+        np.arange(1, 29, dtype=np.float32)
+    )
+
+    # Evitar divisiones entre cero.
+    a = max(abs(float(a)), 1e-3)
+    b = max(abs(float(b)), 1e-3)
+
+    ab_surface = (
+        np.cos(X_mesh / a) * np.sin(Y_mesh / a)
+        + np.cos(X_mesh / b) * np.sin(Y_mesh / b)
+    )
+
+    return ab_surface.astype(np.float32)
+
+surface = field_ab_surface(3.0, 60.0)
+
+# Visualización de la superficie ab
+
+# plt.figure(figsize=(6, 5))
+# plt.imshow(surface, cmap="gray")
+# plt.colorbar(label="Intensidad")
+# plt.title("Superficie AB")
+# plt.axis("off")
+# plt.tight_layout()
+# plt.show()
 
 
 # Mostrar las matrices
