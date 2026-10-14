@@ -13,13 +13,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import convolve
-from skimage.morphology import (
-    erosion,
-    dilation,
-    opening,
-    closing,
-    disk
-)
+from skimage.morphology import erosion, dilation, opening, closing, disk
 from deap import base, creator, gp, tools, algorithms
 from pathlib import Path
 import joblib 
@@ -34,36 +28,37 @@ IMAGE = ImageType
 
 DEBUG_DIR = Path("debug_fitness_zero")
 DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent
 
 # Importar el modelo KNN entrenado
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "knn_mnist.joblib"
+# MODEL_PATH = BASE_DIR / "knn_mnist.joblib"
+# if not MODEL_PATH.exists():
+#     raise FileNotFoundError(f"No se encontró el modelo KNN: {MODEL_PATH}. Ejecutar primero train_knn.py.")
+# knn1 = joblib.load(MODEL_PATH)
+# print("Clasificador KNN cargado.")
 
-if not MODEL_PATH.exists():
-    raise FileNotFoundError(
-        f"No se encontró el modelo KNN: {MODEL_PATH}. "
-        "Ejecutar primero train_knn.py."
-    )
-
-knn1 = joblib.load(MODEL_PATH)
-
-print("Clasificador KNN cargado.")
+# Modelo MLP entrenado
+MODEL_PATH = BASE_DIR / "mlp_mnist.joblib"
+mlp1 = joblib.load(MODEL_PATH)
+mlp1 = mlp1["model"]
+print("Clasificador MLP cargado.")
 
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-target_class = 9    
-generations = 170
+target_class = 9
+generations = 130
+alpha = 0.7        # Peso del mse
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[4].astype(np.float32))
+target_image = (target_images[0].astype(np.float32))
 
 
 def inspect_individual(individual, image, probability, target_class):
     image = np.asarray(image, dtype=np.float32)
 
     X = preprocess_for_knn(image)
-    predicted_class = knn1.predict(X)[0]
+    predicted_class = mlp1.predict(X)[0]
 
     print("\n=== INDIVIDUO CON FITNESS CERO ===")
     #print("Árbol:", individual)
@@ -75,7 +70,7 @@ def inspect_individual(individual, image, probability, target_class):
     print("Media:", image.mean())
     #print("Desviación estándar:", image.std())
 
-    probabilities = knn1.predict_proba(X)[0]
+    probabilities = mlp1.predict_proba(X)[0]
     print("Probabilidades por clase:", probabilities)
 
     plt.figure(figsize=(4, 4))
@@ -239,8 +234,6 @@ pset.addPrimitive(gp_add,[IMAGE, IMAGE], IMAGE)
 pset.addPrimitive(gp_subtract, [IMAGE, IMAGE], IMAGE)
 pset.addPrimitive(gp_multiply, [IMAGE, IMAGE], IMAGE)
 
-# Comprobar conjuntos de primitivas
-
 # Creator
 if not hasattr(creator, "FitnessMin"):
     creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
@@ -316,13 +309,13 @@ def generate_typed(pset, min_, max_, type_=None):
 # gp_state["input_image"] 
 
 # Antes con mse
-def evaluate_individual(individual):
-     target_image = gp_state["target_image"]
-     # func = toolbox.compile(expr=expr)
-     func = toolbox.compile(expr=individual)
-     generated_image = func
-     fitness = mse(generated_image, target_image) # puede agregarse un criterio de paro en caso de que el fitness no mejore después de un número determinado de generaciones
-     return (fitness,)
+# def evaluate_individual(individual):
+#      target_image = gp_state["target_image"]
+#      # func = toolbox.compile(expr=expr)
+#      func = toolbox.compile(expr=individual)
+#      generated_image = func
+#      fitness = mse(generated_image, target_image) # puede agregarse un criterio de paro en caso de que el fitness no mejore después de un número determinado de generaciones
+#      return (fitness,)
 
 # def evaluate_individual(individual):
 #     target_class = gp_state["target_class"]
@@ -331,13 +324,16 @@ def evaluate_individual(individual):
 #     fitness = 1.0 - probability
 #     return (fitness,)
 
-def evaluate_individual2(individual):
+def evaluate_individual(individual):
     target_class = gp_state["target_class"]
     generated_image = toolbox.compile(expr=individual)
-    probability = classifier_probability(generated_image, classifier=knn1, target_class=target_class)
-    fitness = 1.0 - probability
-    if np.isclose(fitness, 0.0):
-        inspect_individual(individual=individual, image=generated_image, probability=probability, target_class=target_class)
+    probability = classifier_probability(generated_image, classifier=mlp1, target_class=target_class)
+    fitness_mse = mse(generated_image, target_image)
+    fitness_mlp = 1.0 - probability
+    fitness = (1-alpha)*fitness_mlp + alpha*(fitness_mse/3000)  # Combina ambos criterios de fitness          65025
+    # fitness = probability # Ver qué pasa con este
+    # if np.isclose(fitness, 0.0):
+    #     inspect_individual(individual=individual, image=generated_image, probability=probability, target_class=target_class)
     return (fitness,)
 
 
@@ -361,8 +357,7 @@ toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max
 ELITE_SIZE = 2
 
 stats = tools.Statistics(
-    lambda individual:
-        individual.fitness.values[0]
+    lambda individual: individual.fitness.values[0]
 )
 
 stats.register("min", np.min)
@@ -385,7 +380,7 @@ gp_state["target_class"] = target_class
 
 # Ejecutar el GP
 population = toolbox.population(
-    n=50
+    n=80
 )
 
 
@@ -414,8 +409,9 @@ logbook.record(
 
 print(logbook.stream)
 
-cxpb = 0.5
-mutpb = 0.6
+# Probabilidades de crossover y mutación
+cxpb = 0.8
+mutpb = 0.5
 # EVOLUCIÓN
 for generation in range(1, generations+1):
     # 1. Selección
