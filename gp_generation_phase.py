@@ -3,11 +3,11 @@ from geometric_images import (
     create_diagonal_line, create_rectangle, create_square, IMAGE, FLOAT)
 from import_data import load_mnist, mnist_path
 from geometric_primitives_gp import gp_circle, gp_line, gp_rectangle
-from aditional_functions import preprocess_for_knn, classifier_probability
+from aditional_functions import preprocess_for_knn, classifier_probability, inspect_individual
 from trigonometric_expressions import (
     field_to_image, gp_sin, gp_cos, gp_tan, X_GRID, Y_GRID, Z_GRID, FIELD, field_sin, 
     field_cos, field_tan, field_add, field_subtract, field_multiply, 
-    field_scale, field_add_constant, field_divide)
+    field_scale, field_add_constant, field_divide, field_ab_surface, A_VALUE, B_VALUE)
 import operator
 import random
 import numpy as np
@@ -23,11 +23,10 @@ class FieldType:
 class ImageType:
     pass
 
-FIELD = FieldType
-IMAGE = ImageType
+# FIELD = FieldType
+# IMAGE = ImageType
+FLOAT = float
 
-DEBUG_DIR = Path("debug_fitness_zero")
-DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 BASE_DIR = Path(__file__).resolve().parent
 
 # Importar el modelo KNN entrenado
@@ -46,50 +45,14 @@ print("Clasificador MLP cargado.")
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-target_class = 9
+target_class = 2
 generations = 130
-alpha = 0.7        # Peso del mse
+alpha = 0.90        # Peso del mse
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[0].astype(np.float32))
+target_image = (target_images[1].astype(np.float32))
 
 
-def inspect_individual(individual, image, probability, target_class):
-    image = np.asarray(image, dtype=np.float32)
-
-    X = preprocess_for_knn(image)
-    predicted_class = mlp1.predict(X)[0]
-
-    print("\n=== INDIVIDUO CON FITNESS CERO ===")
-    #print("Árbol:", individual)
-    #print("Clase objetivo:", target_class)
-    #print("Clase predicha:", predicted_class)
-    #print("Probabilidad objetivo:", probability)
-    #print("Mínimo:", image.min())
-    print("Máximo:", image.max())
-    print("Media:", image.mean())
-    #print("Desviación estándar:", image.std())
-
-    probabilities = mlp1.predict_proba(X)[0]
-    print("Probabilidades por clase:", probabilities)
-
-    plt.figure(figsize=(4, 4))
-    plt.imshow(image, cmap="gray", vmin=0, vmax=255)
-    plt.title(
-        f"Objetivo: {target_class} | "
-        f"Predicción: {predicted_class} | "
-        f"P: {probability:.3f}"
-    )
-    plt.axis("off")
-
-    filename = DEBUG_DIR / (
-        f"fitness_zero_{abs(hash(str(individual)))}.png"
-    )
-
-    plt.savefig(filename, bbox_inches="tight", dpi=150)
-    plt.close()
-
-    print("Imagen guardada en:", filename)
 
 # Terminaales geométricas
 POINT = create_point()
@@ -193,25 +156,12 @@ pset.addTerminal(RECTANGLE,IMAGE, name="Rectangle")
 pset.addTerminal(X_GRID, FIELD, name="X_val")
 pset.addTerminal(Y_GRID, FIELD, name="Y_val")
 pset.addTerminal(Z_GRID, FIELD, name="Z_val")
-
-# Prmitivas geométricas paramétricas
-pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="Circle_Param")
-pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="Line_Param")
-pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Rectangle_Param")
-
-# Primitivas trigonométricas y de campo
-pset.addPrimitive(field_sin, [FIELD], FIELD, name="Sin")
-pset.addPrimitive(field_cos, [FIELD], FIELD, name="Cos")
-pset.addPrimitive(field_tan, [FIELD], FIELD, name="Tan")
-pset.addPrimitive(np.cos, [FIELD], FIELD, name="Coseno")
-pset.addPrimitive(np.sin, [FIELD], FIELD, name="Seno")
-pset.addPrimitive(field_add, [FIELD, FIELD], FIELD, name="Add")
-pset.addPrimitive(field_subtract, [FIELD, FIELD], FIELD, name="Subtract")
-pset.addPrimitive(field_multiply, [FIELD, FIELD], FIELD, name="Multiply")
-pset.addPrimitive(field_divide, [FIELD, FIELD], FIELD, name="F_Divide")
-pset.addPrimitive(field_to_image, [FIELD], IMAGE, name="F_TO_IMG")
-pset.addPrimitive(field_scale, [FIELD, FLOAT], FIELD, name="Scale")
-pset.addPrimitive(field_add_constant, [FIELD, FLOAT], FIELD, name="OFFSET")
+pset.addTerminal(A_VALUE, FLOAT, name="A_val") # Debería ser una ephemeral constant, después lo cambiaré
+pset.addTerminal(B_VALUE, FLOAT, name="B_val")
+# Constantes float para parámetros geométricos
+float_constants = [-4.0, -3.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0, np.pi, 2*np.pi]
+for value in float_constants:
+    pset.addTerminal(value, FLOAT)
 
 # PARÁMETROS EVOLUTIVOS
 pset.addEphemeralConstant("ANGLE", lambda: random.uniform(-np.pi, np.pi), FLOAT)
@@ -223,16 +173,35 @@ pset.addEphemeralConstant("Y_coord", lambda: random.uniform(0.0,27.0),FLOAT) # a
 pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
 pset.addEphemeralConstant("CONST", lambda: random.uniform(-5.0, 5.0), FLOAT)
+pset.addEphemeralConstant("SURFACE_PARAM", lambda: random.uniform(1.0, 60.0), FLOAT)
 
+# Prmitivas geométricas paramétricas
+pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="Circle_Param")
+pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="Line_Param")
+pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Rectangle_Param")
+# Primitivas trigonométricas y de campo
+pset.addPrimitive(field_sin, [FIELD], FIELD, name="Sin")
+pset.addPrimitive(field_cos, [FIELD], FIELD, name="Cos")
+# pset.addPrimitive(field_tan, [FIELD], FIELD, name="Tan")
+pset.addPrimitive(np.cos, [FIELD], FIELD, name="Coseno")
+pset.addPrimitive(np.sin, [FIELD], FIELD, name="Seno")
+pset.addPrimitive(field_add, [FIELD, FIELD], FIELD, name="Add")
+pset.addPrimitive(field_subtract, [FIELD, FIELD], FIELD, name="Field_Subtract")
+pset.addPrimitive(field_multiply, [FIELD, FIELD], FIELD, name="Field_Multiply")
+pset.addPrimitive(field_divide, [FIELD, FIELD], FIELD, name="Field_Divide")
+pset.addPrimitive(field_to_image, [FIELD], IMAGE, name="Field_To_Image")
+pset.addPrimitive(field_scale, [FIELD, FLOAT], FIELD, name="Field_Scale")
+pset.addPrimitive(field_add_constant, [FIELD, FLOAT], FIELD, name="Field_Add_Constant")
+pset.addPrimitive(field_ab_surface, [FLOAT, FLOAT], FIELD, name="AB_SURFACE")
 # Operadores de la imagen
 pset.addPrimitive(gp_erosion, [IMAGE], IMAGE, name="gp_erosion")
 pset.addPrimitive(gp_dilation,[IMAGE], IMAGE, name="gp_dilation")
 pset.addPrimitive(gp_opening, [IMAGE], IMAGE, name="gp_opening")
 pset.addPrimitive(gp_closing, [IMAGE], IMAGE, name="gp_closing")
-pset.addPrimitive(gp_convolution,[IMAGE], IMAGE, name="gp_convolution")
-pset.addPrimitive(gp_add,[IMAGE, IMAGE], IMAGE)
-pset.addPrimitive(gp_subtract, [IMAGE, IMAGE], IMAGE)
-pset.addPrimitive(gp_multiply, [IMAGE, IMAGE], IMAGE)
+pset.addPrimitive(gp_convolution,[IMAGE], IMAGE, name="convolution_mean")
+pset.addPrimitive(gp_add,[IMAGE, IMAGE], IMAGE, name="gp_add")
+pset.addPrimitive(gp_subtract, [IMAGE, IMAGE], IMAGE, name="gp_subtract")
+pset.addPrimitive(gp_multiply, [IMAGE, IMAGE], IMAGE, name="gp_multiply")
 
 # Creator
 if not hasattr(creator, "FitnessMin"):
@@ -254,16 +223,8 @@ def mse(image_a, image_b):
     image_b = np.asarray(image_b,dtype=np.float32)
     return float(np.mean((image_a - image_b) ** 2))
 
-
-# Terminales faltantes:
 # Imagen de entrada
 # pset.addTerminal(gp_state["input_image"], np.ndarray)                                # La imagen como input está dando problemas
-
-# # Constantes float para parámetros geométricos
-float_constants = [-4.0, -3.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 10.0, 12.0, 14.0, 16.0, 20.0, 24.0, 27.0, np.pi, 2*np.pi]
-
-for value in float_constants:
-    pset.addTerminal(value, FLOAT)
 
 
 # Para solucionar el tema de que las terminales de tipo FLOAT no se generen correctamente, se implementa una función personalizada para generar individuos con tipos específicos.
