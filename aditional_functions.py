@@ -1,4 +1,9 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+DEBUG_DIR = Path("debug_fitness_zero")
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Asegurarse de que la imagen esté en el rango [0, 255] y sea de tipo float32 antes de pasarla al clasificador KNN
 def prepare_image_for_knn(image):
@@ -76,3 +81,41 @@ def classifier_probability(image, classifier, target_class):
 #         )
 
 #     return float(probabilities[0, class_indices[0]])
+
+
+def inspect_individual(individual, image, probability, target_class):
+    image = np.asarray(image, dtype=np.float32)
+
+    X = preprocess_for_knn(image)
+    predicted_class = mlp1.predict(X)[0]
+
+    print("\n=== INDIVIDUO CON FITNESS CERO ===")
+    #print("Árbol:", individual)
+    #print("Clase objetivo:", target_class)
+    #print("Clase predicha:", predicted_class)
+    #print("Probabilidad objetivo:", probability)
+    #print("Mínimo:", image.min())
+    print("Máximo:", image.max())
+    print("Media:", image.mean())
+    #print("Desviación estándar:", image.std())
+
+    probabilities = mlp1.predict_proba(X)[0]
+    print("Probabilidades por clase:", probabilities)
+
+    plt.figure(figsize=(4, 4))
+    plt.imshow(image, cmap="gray", vmin=0, vmax=255)
+    plt.title(
+        f"Objetivo: {target_class} | "
+        f"Predicción: {predicted_class} | "
+        f"P: {probability:.3f}"
+    )
+    plt.axis("off")
+
+    filename = DEBUG_DIR / (
+        f"fitness_zero_{abs(hash(str(individual)))}.png"
+    )
+
+    plt.savefig(filename, bbox_inches="tight", dpi=150)
+    plt.close()
+
+    print("Imagen guardada en:", filename)
