@@ -59,10 +59,16 @@ def field_divide(a, b):
 
 # Funciones trigonométricas para FIELD
 def field_sin(a):
-    return np.sin(a).astype(np.float32)
-
+    a = np.asarray(a, dtype=np.float32)
+    result = np.sin(a)
+    result = np.nan_to_num(result, nan=0.0, posinf=10.0, neginf=-10.0)
+    return np.clip(result, -10.0, 10.0).astype(np.float32)
+    
 def field_cos(a):
-    return np.cos(a).astype(np.float32)
+    a = np.asarray(a, dtype=np.float32)
+    result = np.cos(a)
+    result = np.nan_to_num(result, nan=0.0, posinf=10.0, neginf=-10.0)
+    return np.clip(result, -10.0, 10.0).astype(np.float32)
 
 def field_tan(a):
     a = np.asarray(a, dtype=np.float32)
@@ -102,8 +108,10 @@ def field_to_image(field):
 # plt.tight_layout()
 # plt.show()
 
+A_VALUE = 3.0
+B_VALUE = 60.0
 # Imagen sintética basada en la superficie ab
-def field_ab_surface(a, b):
+def field_ab_surface(a=A_VALUE, b=B_VALUE):
     X_mesh, Y_mesh = np.meshgrid(
         np.arange(1, 29, dtype=np.float32),
         np.arange(1, 29, dtype=np.float32)
@@ -120,10 +128,9 @@ def field_ab_surface(a, b):
 
     return ab_surface.astype(np.float32)
 
-surface = field_ab_surface(3.0, 60.0)
+# surface = field_ab_surface(3.0, 60.0)
 
 # Visualización de la superficie ab
-
 # plt.figure(figsize=(6, 5))
 # plt.imshow(surface, cmap="gray")
 # plt.colorbar(label="Intensidad")
