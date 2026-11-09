@@ -8,6 +8,7 @@ from trigonometric_expressions import (
     field_to_image, gp_sin, gp_cos, gp_tan, X_GRID, Y_GRID, Z_GRID, FIELD, field_sin, 
     field_cos, field_tan, field_add, field_subtract, field_multiply, 
     field_scale, field_add_constant, field_divide, field_ab_surface, A_VALUE, B_VALUE)
+from visualization import POINT, LINE_H, LINE_V, LINE_D1, LINE_D2, CIRCLE, SQUARE, RECTANGLE
 import operator
 import random
 import numpy as np
@@ -30,11 +31,11 @@ FLOAT = float
 BASE_DIR = Path(__file__).resolve().parent
 
 # Importar el modelo KNN entrenado
-# MODEL_PATH = BASE_DIR / "knn_mnist.joblib"
-# if not MODEL_PATH.exists():
-#     raise FileNotFoundError(f"No se encontró el modelo KNN: {MODEL_PATH}. Ejecutar primero train_knn.py.")
-# knn1 = joblib.load(MODEL_PATH)
-# print("Clasificador KNN cargado.")
+MODEL_PATH = BASE_DIR / "knn_mnist.joblib"
+if not MODEL_PATH.exists():
+    raise FileNotFoundError(f"No se encontró el modelo KNN: {MODEL_PATH}. Ejecutar primero train_knn.py.")
+knn1 = joblib.load(MODEL_PATH)
+print("Clasificador KNN cargado.")
 
 # Modelo MLP entrenado
 MODEL_PATH = BASE_DIR / "mlp_mnist.joblib"
@@ -45,43 +46,13 @@ print("Clasificador MLP cargado.")
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-target_class = 2
-generations = 130
+target_class = 4
+generations = 90
 alpha = 0.90        # Peso del mse
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[1].astype(np.float32))
+target_image = (target_images[0].astype(np.float32))
 
-
-
-# Terminaales geométricas
-POINT = create_point()
-LINE_H = create_horizontal_line()
-LINE_V = create_vertical_line()
-LINE_D1 = create_diagonal_line(direction=1)
-LINE_D2 = create_diagonal_line(direction=-1)
-CIRCLE = create_circle()
-SQUARE = create_square()
-RECTANGLE = create_rectangle(width=16,height=10)
-
-# Visualizar las terminales
-# geometric_terminals = {
-#     "POINT": POINT,
-#     "LINE_H": LINE_H,
-#     "LINE_V": LINE_V,
-#     "LINE_D1": LINE_D1,
-#     "LINE_D2": LINE_D2,
-#     "CIRCLE": CIRCLE,
-#     "SQUARE": SQUARE,
-#     "RECTANGLE": RECTANGLE
-# }
-# fig, axes = plt.subplots( 2, 4, figsize=(10, 5))
-# for ax, (name, image) in zip(axes.ravel(), geometric_terminals.items()):
-#     ax.imshow(image, cmap="gray", vmin=0, vmax=255)
-#     ax.set_title(name)
-#     ax.axis("off")
-# plt.tight_layout()
-# plt.show()
 
 # OPERADORES MORFOLÓGICOS
 selem = disk(1)
@@ -144,7 +115,7 @@ pset = gp.PrimitiveSetTyped(
 
 # pset.renameArguments(ARG0="I")
 
-# Registrar las terminales geométricas
+# Registrar las terminales geométricas  (NO TODOS DEBERÍAN SER TERMINALES, ALGUNOS DEBEN SE ESTRICTAMENTE PARAMÉTRICOS)
 pset.addTerminal(POINT, IMAGE, name="Point")
 pset.addTerminal(LINE_H,IMAGE, name="Line_H")
 pset.addTerminal(LINE_V, IMAGE, name="Line_V")
@@ -164,25 +135,33 @@ for value in float_constants:
     pset.addTerminal(value, FLOAT)
 
 # PARÁMETROS EVOLUTIVOS
-pset.addEphemeralConstant("ANGLE", lambda: random.uniform(-np.pi, np.pi), FLOAT)
-pset.addEphemeralConstant("LENGTH",lambda: random.uniform(2.0, 28.0),FLOAT) # antes 2 - 28 -> 2 - 14
-pset.addEphemeralConstant("THICKNESS",lambda: random.uniform(1.0,4.0), FLOAT) # antes 1 - 4 -> 1 - 4
-pset.addEphemeralConstant("RADIUS",lambda: random.uniform(1.0,14.0),FLOAT) # antes 1 - 14 -> 1 - 7
-pset.addEphemeralConstant("X_coord",lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
-pset.addEphemeralConstant("Y_coord", lambda: random.uniform(0.0,27.0),FLOAT) # antes 0 - 27 -> 0 - 15
-pset.addEphemeralConstant("WIDTH",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
-pset.addEphemeralConstant("HEIGHT",lambda: random.uniform(2.0,28.0),FLOAT) # antes 2 - 28 -> 2 - 14
-pset.addEphemeralConstant("CONST", lambda: random.uniform(-5.0, 5.0), FLOAT)
-pset.addEphemeralConstant("SURFACE_PARAM", lambda: random.uniform(1.0, 60.0), FLOAT)
+from functools import partial
+
+pset.addEphemeralConstant("ANGLE", partial(random.uniform, -np.pi, np.pi), FLOAT)
+pset.addEphemeralConstant("LENGTH", partial(random.uniform, 2.0, 28.0), FLOAT) # antes 2 - 28 -> 2 - 14
+pset.addEphemeralConstant("THICKNESS", partial(random.uniform, 1.0, 4.0), FLOAT) # antes 1 - 4 -> 1 - 4
+pset.addEphemeralConstant("RADIUS", partial(random.uniform, 1.0, 14.0), FLOAT) # antes 1 - 14 -> 1 - 7
+pset.addEphemeralConstant("X_coord", partial(random.uniform, 0.0, 27.0), FLOAT) # antes 0 - 27 -> 0 - 15
+pset.addEphemeralConstant("Y_coord", partial(random.uniform, 0.0, 27.0), FLOAT) # antes 0 - 27 -> 0 - 15
+pset.addEphemeralConstant("WIDTH", partial(random.uniform, 2.0, 28.0), FLOAT) # antes 2 - 28 -> 2 - 14
+pset.addEphemeralConstant("HEIGHT", partial(random.uniform, 2.0, 28.0), FLOAT) # antes 2 - 28 -> 2 - 14
+pset.addEphemeralConstant("CONST", partial(random.uniform, -5.0, 5.0), FLOAT)
+pset.addEphemeralConstant("SURFACE_PARAM", partial(random.uniform, 1.0, 60.0), FLOAT)
 
 # Prmitivas geométricas paramétricas
+# pset.addPrimitive(create_horizontal_line, [FLOAT, FLOAT], IMAGE, name="Horizontal_Line_Param")
+# pset.addPrimitive(create_vertical_line, [FLOAT, FLOAT], IMAGE, name="Vertical_Line_Param")
+# pset.addPrimitive(create_diagonal_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="Diagonal_Line_Param")
+# pset.addPrimitive(create_rectangle, [FLOAT, FLOAT, FLOAT], IMAGE, name="Rectangle_Param")
+# pset.addPrimitive(create_square, [FLOAT, FLOAT], IMAGE, name="Square_Param")
+
 pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="Circle_Param")
 pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="Line_Param")
 pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Rectangle_Param")
 # Primitivas trigonométricas y de campo
 pset.addPrimitive(field_sin, [FIELD], FIELD, name="Sin")
 pset.addPrimitive(field_cos, [FIELD], FIELD, name="Cos")
-# pset.addPrimitive(field_tan, [FIELD], FIELD, name="Tan")
+pset.addPrimitive(field_tan, [FIELD], FIELD, name="Tan")
 pset.addPrimitive(np.cos, [FIELD], FIELD, name="Coseno")
 pset.addPrimitive(np.sin, [FIELD], FIELD, name="Seno")
 pset.addPrimitive(field_add, [FIELD, FIELD], FIELD, name="Add")
@@ -210,7 +189,6 @@ if not hasattr(creator, "FitnessMin"):
 if not hasattr(creator, "Individual"):
     creator.create("Individual", gp.PrimitiveTree,fitness=creator.FitnessMin)
 
-
 gp_state = {
     #"input_image": None,
     "target_image": None,
@@ -222,10 +200,6 @@ def mse(image_a, image_b):
     image_a = np.asarray(image_a,dtype=np.float32)
     image_b = np.asarray(image_b,dtype=np.float32)
     return float(np.mean((image_a - image_b) ** 2))
-
-# Imagen de entrada
-# pset.addTerminal(gp_state["input_image"], np.ndarray)                                # La imagen como input está dando problemas
-
 
 # Para solucionar el tema de que las terminales de tipo FLOAT no se generen correctamente, se implementa una función personalizada para generar individuos con tipos específicos.
 def generate_typed(pset, min_, max_, type_=None):
@@ -288,9 +262,11 @@ def generate_typed(pset, min_, max_, type_=None):
 def evaluate_individual(individual):
     target_class = gp_state["target_class"]
     generated_image = toolbox.compile(expr=individual)
+    # probability_knn = classifier_probability(generated_image, classifier=knn1, target_class=target_class)
     probability = classifier_probability(generated_image, classifier=mlp1, target_class=target_class)
     fitness_mse = mse(generated_image, target_image)
     fitness_mlp = 1.0 - probability
+    # fitness_knn = 1.0 - probability_knn
     fitness = (1-alpha)*fitness_mlp + alpha*(fitness_mse/3000)  # Combina ambos criterios de fitness          65025
     # fitness = probability # Ver qué pasa con este
     # if np.isclose(fitness, 0.0):
@@ -300,7 +276,7 @@ def evaluate_individual(individual):
 
 # TOOLBOX
 toolbox = base.Toolbox()
-#toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=3) # cambiado por:
+# toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=3) # cambiado por:
 toolbox.register("expr", generate_typed, pset=pset, min_=1, max_=3)
 toolbox.register("individual", tools.initIterate,creator.Individual, toolbox.expr)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
@@ -315,7 +291,7 @@ toolbox.register("mutate",gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=8))
 
 
-ELITE_SIZE = 2
+ELITE_SIZE = 3
 
 stats = tools.Statistics(
     lambda individual: individual.fitness.values[0]
@@ -327,7 +303,6 @@ stats.register("max", np.max)
 
 hall_of_fame = tools.HallOfFame(1)
 
-
 # Imagen aletoria
 # np.random.seed(RANDOM_SEED)
 # random_image = np.random.uniform( 0, 255, size=(28, 28)).astype(np.float32)
@@ -337,13 +312,10 @@ hall_of_fame = tools.HallOfFame(1)
 gp_state["target_image"] = target_image
 gp_state["target_class"] = target_class
 
-
-
 # Ejecutar el GP
 population = toolbox.population(
     n=80
 )
-
 
 logbook = tools.Logbook()
 logbook.header = [
@@ -451,11 +423,15 @@ best_image = best_function #(gp_state["input_image"])
 # print("mean =", best_image.mean())
 print("MSE =", mse(best_image, gp_state["target_image"]))
 
-#black_image = np.zeros((28, 28), dtype=np.float32)
-#X_black = preprocess_for_knn(black_image)
-#print("Predicción:", knn1.predict(X_black)[0])
-#print("Probabilidades:", knn1.predict_proba(X_black)[0])
-#print("Clases:", knn1.classes_)
+iresult = preprocess_for_knn(best_image)
+print("Predicción mlp:", mlp1.predict(iresult)[0])
+print("Probabilidades:", mlp1.predict_proba(iresult)[0])
+print("Con una Probabilidad:", mlp1.predict_proba(iresult)[0][target_class]*100,"%")
+print("Clases:", mlp1.classes_)
+
+# print("Predicción knn:", knn1.predict(iresult)[0])
+# print("Probabilidades:", knn1.predict_proba(iresult)[0])
+# print("Clases:", knn1.classes_)
 
 # Visualizar resultado
 fig, axes = plt.subplots( 1, 3, figsize=(10, 4))
