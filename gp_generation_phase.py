@@ -47,11 +47,16 @@ X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
 target_class = 4
-generations = 90
+generations = 790
 alpha = 0.90        # Peso del mse
+
+# PENALIZACIÓN POR PROFUNDIDAD
+MAX_DEPTH_ALLOWED = 7 
+DEPTH_PENALTY = 0.15
+
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[0].astype(np.float32))
+target_image = (target_images[10].astype(np.float32))
 
 
 # OPERADORES MORFOLÓGICOS
@@ -267,10 +272,10 @@ def evaluate_individual(individual):
     fitness_mse = mse(generated_image, target_image)
     fitness_mlp = 1.0 - probability
     # fitness_knn = 1.0 - probability_knn
-    fitness = (1-alpha)*fitness_mlp + alpha*(fitness_mse/3000)  # Combina ambos criterios de fitness          65025
-    # fitness = probability # Ver qué pasa con este
-    # if np.isclose(fitness, 0.0):
-    #     inspect_individual(individual=individual, image=generated_image, probability=probability, target_class=target_class)
+    fitness_base = (1-alpha)*fitness_mlp + alpha*(fitness_mse/3000)  # Combina ambos criterios de fitness          65025
+    depth = individual.height
+    penalty = DEPTH_PENALTY * max(0, depth - MAX_DEPTH_ALLOWED)
+    fitness = fitness_base + penalty
     return (fitness,)
 
 
