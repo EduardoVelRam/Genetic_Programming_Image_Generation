@@ -2,7 +2,7 @@ from geometric_images import (
     clip_image, create_point, create_horizontal_line, create_vertical_line, create_circle, 
     create_diagonal_line, create_rectangle, create_square, IMAGE, FLOAT)
 from import_data import load_mnist, mnist_path
-from geometric_primitives_gp import gp_circle, gp_line, gp_rectangle
+from geometric_primitives_gp import gp_circle, gp_line, gp_rectangle, gp_point, gp_triangle, gp_ellipse
 from aditional_functions import preprocess_for_knn, classifier_probability, inspect_individual
 from trigonometric_expressions import (
     field_to_image, gp_sin, gp_cos, gp_tan, X_GRID, Y_GRID, Z_GRID, FIELD, field_sin, 
@@ -46,17 +46,19 @@ print("Clasificador MLP cargado.")
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 print("gp_generation_phase")
-target_class = 4
-generations = 790
-alpha = 0.90        # Peso del mse
+target_class = 0
+generations = 90
+alpha = 0.85        # Peso del mse
 
 # PENALIZACIÓN POR PROFUNDIDAD
 MAX_DEPTH_ALLOWED = 7 
-DEPTH_PENALTY = 0.15
+DEPTH_PENALTY = 0.2
+
+pp_weight = 2.0  # Peso para las primitivas paramétricas
 
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[10].astype(np.float32))
+target_image = (target_images[3].astype(np.float32))
 
 
 # OPERADORES MORFOLÓGICOS
@@ -105,11 +107,6 @@ def gp_multiply(image_a, image_b):
     result = np.multiply(image_a, image_b)
     return clip_image(result)
 
-# pset = gp.PrimitiveSetTyped(
-#     "MAIN",
-#     [IMAGE],
-#     IMAGE
-# )
 
 # Cambiado para que la imagen de entrada sea un argumento en lugar de una terminal 
 pset = gp.PrimitiveSetTyped(
@@ -163,6 +160,11 @@ pset.addEphemeralConstant("SURFACE_PARAM", partial(random.uniform, 1.0, 60.0), F
 pset.addPrimitive(gp_circle, [FLOAT, FLOAT, FLOAT], IMAGE, name="Circle_Param")
 pset.addPrimitive(gp_line, [FLOAT, FLOAT, FLOAT], IMAGE, name="Line_Param")
 pset.addPrimitive(gp_rectangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Rectangle_Param")
+# Primitivas geométricas parametrizables
+pset.addPrimitive(gp_point, [FLOAT, FLOAT, FLOAT], IMAGE, name="Point_Param")
+pset.addPrimitive(gp_ellipse, [FLOAT, FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Ellipse_Param")
+pset.addPrimitive(gp_triangle, [FLOAT, FLOAT, FLOAT, FLOAT], IMAGE, name="Triangle_Param")
+
 # Primitivas trigonométricas y de campo
 pset.addPrimitive(field_sin, [FIELD], FIELD, name="Sin")
 pset.addPrimitive(field_cos, [FIELD], FIELD, name="Cos")
@@ -206,6 +208,28 @@ def mse(image_a, image_b):
     image_b = np.asarray(image_b,dtype=np.float32)
     return float(np.mean((image_a - image_b) ** 2))
 
+# ==========================================================
+# SELECCIÓN PONDERADA DE PRIMITIVAS
+PARAMETRIC_PRIMITIVES = {
+    "Point_Param",
+    "Circle_Param",
+    "Line_Param",
+    "Rectangle_Param",
+    "Ellipse_Param",
+    "Triangle_Param"
+}
+
+def select_primitive(pset, current_type):
+
+    primitives = pset.primitives[current_type]
+    # Se tiene un peso 5 veces mayor para las primitivas paramétricas
+    weights = [
+        pp_weight if primitive.name in PARAMETRIC_PRIMITIVES else 1.0
+        for primitive in primitives
+    ]
+
+    return random.choices(primitives, weights=weights, k=1)[0]
+
 # Para solucionar el tema de que las terminales de tipo FLOAT no se generen correctamente, se implementa una función personalizada para generar individuos con tipos específicos.
 def generate_typed(pset, min_, max_, type_=None):
     if type_ is None:
@@ -228,7 +252,8 @@ def generate_typed(pset, min_, max_, type_=None):
             expr.append(terminal)
             continue
         if depth < min_:
-            primitive = random.choice(pset.primitives[current_type])
+            # primitive = random.choice(pset.primitives[current_type])
+            primitive = select_primitive(pset, current_type)
             expr.append(primitive)
             for arg_type in reversed(primitive.args):
                 stack.append((depth + 1, arg_type))
@@ -239,7 +264,8 @@ def generate_typed(pset, min_, max_, type_=None):
                 terminal = terminal()
             expr.append(terminal)
         else:
-            primitive = random.choice(pset.primitives[current_type])
+            # primitive = random.choice(pset.primitives[current_type])
+            primitive = select_primitive(pset, current_type)
             expr.append(primitive)
             for arg_type in reversed(primitive.args):
                 stack.append((depth + 1, arg_type))
@@ -432,7 +458,6 @@ iresult = preprocess_for_knn(best_image)
 print("Predicción mlp:", mlp1.predict(iresult)[0])
 print("Probabilidades:", mlp1.predict_proba(iresult)[0])
 print("Con una Probabilidad:", mlp1.predict_proba(iresult)[0][target_class]*100,"%")
-print("Clases:", mlp1.classes_)
 
 # print("Predicción knn:", knn1.predict(iresult)[0])
 # print("Probabilidades:", knn1.predict_proba(iresult)[0])
