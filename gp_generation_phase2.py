@@ -337,3 +337,202 @@ toolbox.register("expr_mut", generate_typed, pset=pset, min_=0, max_=2)
 toolbox.register("mutate",gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=8))
 
+
+ELITE_SIZE = 3
+
+stats = tools.Statistics(
+    lambda individual: individual.fitness.values[0]
+)
+
+stats.register("min", np.min)
+stats.register("avg", np.mean)
+stats.register("max", np.max)
+
+hall_of_fame = tools.HallOfFame(1)
+
+# Imagen aletoria
+# np.random.seed(RANDOM_SEED)
+# random_image = np.random.uniform( 0, 255, size=(28, 28)).astype(np.float32)
+
+# Se configura el estado
+# gp_state["input_image"] = random_image
+gp_state["target_image"] = target_image
+gp_state["target_class"] = target_class
+
+# Ejecutar el GP
+population = toolbox.population(
+    n=80
+)
+
+logbook = tools.Logbook()
+logbook.header = [
+    "gen",
+    "nevals",
+    "min",
+    "avg",
+    "max"
+]
+
+# Evaluación inicial
+for individual in population:
+    individual.fitness.values = toolbox.evaluate(individual)
+
+hall_of_fame.update(population)
+
+record = stats.compile(population)
+
+logbook.record(
+    gen=0,
+    nevals=len(population),
+    **record
+)
+
+print(logbook.stream)
+
+# Probabilidades de crossover y mutación
+cxpb = 0.8
+mutpb = 0.5
+# EVOLUCIÓN
+for generation in range(1, generations+1):
+    # 1. Selección
+    offspring = toolbox.select(population,len(population) - ELITE_SIZE)
+    offspring = algorithms.varAnd(offspring, toolbox, cxpb, mutpb)
+    offspring = list(map(toolbox.clone, offspring))
+
+    # 2. Crossover
+    for child1, child2 in zip(offspring[::2], offspring[1::2]):
+        if random.random() < 0.5:
+            toolbox.mate(child1, child2)
+            del child1.fitness.values
+            del child2.fitness.values
+
+    # 3. Mutación
+    for mutant in offspring:
+        if random.random() < 0.2:
+            toolbox.mutate(mutant)
+            del mutant.fitness.values
+
+    # 4. Evaluación
+    invalid_individuals = [
+        individual
+        for individual in offspring
+        if not individual.fitness.valid
+    ]
+
+    for individual in invalid_individuals:
+        individual.fitness.values = toolbox.evaluate(individual)
+
+    # 5. Elitismo
+    elites = tools.selBest(population, ELITE_SIZE)
+    elites = list(map(toolbox.clone, elites))
+
+    # 6. Nueva generación
+    population = offspring + elites
+
+    # 7. Hall of Fame
+    hall_of_fame.update(population)
+
+    # 8. Estadísticas
+    record = stats.compile(population)
+
+    logbook.record(
+        gen=generation,
+        nevals=len(invalid_individuals),
+        **record
+    )
+
+    print(logbook.stream)
+
+
+# result_population, logbook = algorithms.eaSimple(
+#     population,
+#     toolbox,
+#     cxpb=0.5,
+#     mutpb=0.6,
+#     ngen=80,
+#     stats=stats,
+#     halloffame=hall_of_fame,
+#     verbose=True
+# )
+
+best_individual = hall_of_fame[0]
+
+print("\nMejor individuo:")
+print(best_individual)
+print("\nFitness:", best_individual.fitness.values[0])
+best_function = toolbox.compile(expr=best_individual)
+best_image = best_function #(gp_state["input_image"])
+
+
+# print("\nImagen generada:")
+# print( "min =", best_image.min())
+# print( "max =", best_image.max())
+# print("mean =", best_image.mean())
+print("MSE =", mse(best_image, gp_state["target_image"]))
+
+iresult = preprocess_for_knn(best_image)
+probabilidades = mlp1.predict_proba(iresult)[0]
+clases = np.asarray(mlp1.classes_)
+print("Predicción mlp:", clases[np.argmax(probabilidades)])
+print("Probabilidades:", probabilidades)
+print("Con una Probabilidad:", probabilidades[np.where(clases == target_class)[0][0]] * 100, "%")
+
+print(f"Semilla utilizada: {RANDOM_SEED}")
+# print("Predicción knn:", knn1.predict(iresult)[0])
+# print("Probabilidades:", knn1.predict_proba(iresult)[0])
+# print("Clases:", knn1.classes_)
+
+# Guardar exactamente cuatro figuras por ejecucion.
+RESULTS_DIR = BASE_DIR / "resultados"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+# Borrar PNG anteriores para que el directorio solo contenga las cuatro figuras nuevas.
+for archivo_anterior in RESULTS_DIR.glob("*.png"):
+    archivo_anterior.unlink()
+
+# 1. Imagen generada sin ejes ni anotaciones (28x28, escala de grises).
+Image.fromarray(np.rint(np.clip(best_image, 0, 255)).astype(np.uint8)).save(
+    RESULTS_DIR / "01_imagen_generada.png")
+
+# 2. Evolucion del fitness: minimo, promedio y maximo por generacion.
+fig, ax = plt.subplots(figsize=(9, 5))
+generaciones = logbook.select("gen")
+for metrica, etiqueta in (("min", "Minimo"), ("avg", "Promedio"), ("max", "Maximo")):
+    ax.plot(generaciones, logbook.select(metrica), label=etiqueta)
+ax.set(xlabel="Generacion", ylabel="Fitness", title="Evolucion del fitness")
+ax.legend()
+ax.grid(alpha=0.3)
+fig.tight_layout()
+fig.savefig(RESULTS_DIR / "02_evolucion_fitness.png", dpi=200)
+plt.close(fig)
+
+# 3. Probabilidad de pertenencia a cada clase (modelo MLP).
+fig, ax = plt.subplots(figsize=(9, 5))
+colores = ["tab:orange" if clase == target_class else "tab:blue"
+           for clase in clases]
+ax.bar(clases, probabilidades * 100, color=colores)
+ax.set(xlabel="Clase MNIST", ylabel="Probabilidad (%)",
+       title="Probabilidades por clase (MLP)")
+ax.set_xticks(range(10))
+ax.set_ylim(0, 105)
+ax.grid(axis="y", alpha=0.3)
+fig.tight_layout()
+fig.savefig(RESULTS_DIR / "03_probabilidades_clases.png", dpi=200)
+plt.close(fig)
+
+# 4. Comparacion 2x2: original a la izquierda, binarizada a la derecha.
+objetivo = gp_state["target_image"]
+imagen_normalizada = np.where(best_image > best_image.mean(), 255, 0).astype(np.float32)
+objetivo_normalizado = np.where(objetivo > objetivo.mean(), 255, 0).astype(np.float32)
+fig, axes = plt.subplots(2, 2, figsize=(7, 7))
+imagenes = ((best_image, "Generada"), (imagen_normalizada, "Generada (umbralizada)"),
+            (objetivo, "Objetivo"), (objetivo_normalizado, "Objetivo (umbralizado)"))
+for ax, (imagen, titulo) in zip(axes.flat, imagenes):
+    ax.imshow(imagen, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
+    ax.set_title(titulo)
+    ax.axis("off")
+fig.suptitle(f"Clase objetivo: {target_class} | Semilla: {RANDOM_SEED}")
+fig.tight_layout()
+fig.savefig(RESULTS_DIR / "04_comparacion_2x2.png", dpi=200)
+print(f"Cuatro figuras guardadas en: {RESULTS_DIR}")
+plt.show()  # Unica figura mostrada en pantalla.
+plt.close(fig)
