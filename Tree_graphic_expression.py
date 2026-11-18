@@ -1,214 +1,168 @@
-import re
-import matplotlib.pyplot as plt
+import ast
+import math
 import networkx as nx
+import matplotlib.pyplot as plt
 
 
-# ============================================================
-# 1. Expresión GP a visualizar
-# ============================================================
+# ---------------------------------------------------------
+# Formato de etiquetas
+# ---------------------------------------------------------
 
-expression = """
-gp_subtract(gp_add(gp_subtract(POINT, RECTANGLE), gp_convolution(gp_closing(gp_dilation(CIRCLE)))), gp_add(LINE_PARAM(6.56, 5.0, 7.0), SQUARE))
-"""
+def format_label(value):
 
+    if isinstance(value, float):
+        return f"{value:.1f}"
 
-# ============================================================
-# 2. Parser de la expresión
-# ============================================================
-
-def tokenize(expression):
-    """
-    Divide la expresión en tokens.
-    """
-    pattern = r"""
-        [A-Za-z_][A-Za-z0-9_]*   # nombres de funciones/terminales
-        |
-        [-+]?\d*\.\d+            # números decimales
-        |
-        [-+]?\d+                 # números enteros
-        |
-        [(),]                    # paréntesis y comas
-    """
-
-    return re.findall(pattern, expression, re.VERBOSE)
+    return str(value)
 
 
-def parse_expression(tokens, index=0):
-    """
-    Construye recursivamente un árbol a partir de los tokens.
-    """
+# ---------------------------------------------------------
+# Construcción del árbol a partir de una expresión GP
+# ---------------------------------------------------------
 
-    name = tokens[index]
-    index += 1
+def build_graph(node, graph, labels, counter):
 
-    # Si es una función
-    if index < len(tokens) and tokens[index] == "(":
+    node_id = counter[0]
+    counter[0] += 1
 
-        index += 1  # consumir '('
+    graph.add_node(node_id)
 
-        children = []
+    # Llamadas a funciones: gp_add(...), Tan(...), etc.
+    if isinstance(node, ast.Call):
 
-        while tokens[index] != ")":
+        if isinstance(node.func, ast.Name):
+            label = node.func.id
 
-            child, index = parse_expression(tokens, index)
-            children.append(child)
-
-            if tokens[index] == ",":
-                index += 1
-
-        index += 1  # consumir ')'
-
-        return {
-            "name": name,
-            "children": children
-        }, index
-
-    # Si es un terminal
-    return {
-        "name": name,
-        "children": []
-    }, index
-
-
-# ============================================================
-# 3. Construcción del grafo
-# ============================================================
-
-def build_graph(tree):
-
-    graph = nx.DiGraph()
-
-    counter = [0]
-
-    def add_node(node, parent=None):
-
-        node_id = counter[0]
-        counter[0] += 1
-
-        graph.add_node(
-            node_id,
-            label=node["name"]
-        )
-
-        if parent is not None:
-            graph.add_edge(parent, node_id)
-
-        for child in node["children"]:
-            add_node(child, node_id)
-
-        return node_id
-
-    add_node(tree)
-
-    return graph
-
-
-# ============================================================
-# 4. Layout jerárquico
-# ============================================================
-
-def hierarchy_pos(graph, root=0, width=1.0, vert_gap=0.25,
-                  vert_loc=0, xcenter=0.5):
-
-    pos = {}
-
-    def _hierarchy_pos(
-        graph,
-        root,
-        left,
-        right,
-        vert_loc,
-        pos,
-        parent=None
-    ):
-
-        children = list(graph.neighbors(root))
-
-        if not children:
-
-            pos[root] = ((left + right) / 2, vert_loc)
+        elif isinstance(node.func, ast.Attribute):
+            label = node.func.attr
 
         else:
+            label = "Function"
 
-            dx = (right - left) / len(children)
+        labels[node_id] = label
 
-            for i, child in enumerate(children):
+        for argument in node.args:
 
-                child_left = left + i * dx
-                child_right = left + (i + 1) * dx
-
-                _hierarchy_pos(
-                    graph,
-                    child,
-                    child_left,
-                    child_right,
-                    vert_loc - vert_gap,
-                    pos,
-                    root
-                )
-
-            pos[root] = (
-                (left + right) / 2,
-                vert_loc
+            child_id = build_graph(
+                argument, graph, labels, counter
             )
 
-    _hierarchy_pos(
-        graph,
-        root,
-        0,
-        width,
-        vert_loc,
-        pos
-    )
+            graph.add_edge(node_id, child_id)
 
-    return pos
+    # Variables y terminales
+    elif isinstance(node, ast.Name):
+
+        labels[node_id] = node.id
+
+    # Constantes numéricas
+    elif isinstance(node, ast.Constant):
+
+        labels[node_id] = format_label(node.value)
+
+    # Operaciones binarias
+    elif isinstance(node, ast.BinOp):
+
+        operators = {
+            ast.Add: "+",
+            ast.Sub: "-",
+            ast.Mult: "*",
+            ast.Div: "/",
+            ast.Pow: "**"
+        }
+
+        labels[node_id] = operators.get(
+            type(node.op), "?"
+        )
+
+        left_id = build_graph(
+            node.left, graph, labels, counter
+        )
+
+        right_id = build_graph(
+            node.right, graph, labels, counter
+        )
+
+        graph.add_edge(node_id, left_id)
+        graph.add_edge(node_id, right_id)
+
+    # Operaciones unarias
+    elif isinstance(node, ast.UnaryOp):
+
+        labels[node_id] = "-"
+
+        child_id = build_graph(
+            node.operand, graph, labels, counter
+        )
+
+        graph.add_edge(node_id, child_id)
+
+    else:
+
+        labels[node_id] = str(node)
+
+    return node_id
 
 
-# ============================================================
-# 5. Crear el árbol
-# ============================================================
+# ---------------------------------------------------------
+# Distribución jerárquica del árbol
+# ---------------------------------------------------------
 
-tokens = tokenize(expression)
-
-tree, index = parse_expression(tokens)
-
-graph = build_graph(tree)
-
-pos = hierarchy_pos(graph)
-
-
-# ============================================================
-# 6. Dibujar
-# ============================================================
-
-plt.figure(figsize=(16, 8))
-
-labels = nx.get_node_attributes(graph, "label")
-
-nx.draw(
+def calculate_tree_positions(
     graph,
-    pos,
-    labels=labels,
-    with_labels=True,
-    node_size=3500,
-    node_color="lightblue",
-    node_shape="o",
-    font_size=9,
-    font_weight="bold",
-    arrows=True,
-    arrowsize=20,
-    edge_color="gray"
-)
+    labels,
+    root,
+    horizontal_spacing=1.0,
+    vertical_spacing=2.0
+):
 
-plt.title(
-    "Árbol sintáctico del individuo GP",
-    fontsize=16
-)
+    positions = {}
+    leaf_counter = [0]
 
-plt.axis("off")
+    def calculate_subtree(node, depth):
 
-plt.tight_layout()
+        children = list(graph.successors(node))
 
-# Mostrar la imagen.
-# NO se guarda automáticamente.
-plt.show()
+        # Caso 1: nodo hoja
+        if not children:
+
+            x = leaf_counter[0]
+            leaf_counter[0] += 1
+
+            positions[node] = (
+                x * horizontal_spacing,
+                -depth * vertical_spacing
+            )
+
+            return x, x
+
+        # Caso 2: nodo con hijos
+        intervals = []
+
+        for child in children:
+
+            interval = calculate_subtree(
+                child, depth + 1
+            )
+
+            intervals.append(interval)
+
+        # Intervalo horizontal ocupado por el subárbol
+        left = intervals[0][0]
+        right = intervals[-1][1]
+
+        # El padre se coloca en el centro de sus descendientes
+        x = (left + right) / 2
+
+        positions[node] = (
+            x * horizontal_spacing,
+            -depth * vertical_spacing
+        )
+
+        return left, right
+
+    calculate_subtree(root, 0)
+
+    return positions, leaf_counter[0]
+
+
+
