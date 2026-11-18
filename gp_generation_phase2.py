@@ -45,6 +45,8 @@ random.seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 # Para semilla específfica:
 # python gp_generation_phase2.py --seed 12345
+# Buenas semillas para:
+# 9: 1704774852
 
 # Importar el modelo KNN entrenado
 MODEL_PATH = BASE_DIR / "knn_mnist.joblib"
@@ -59,22 +61,27 @@ mlp1 = joblib.load(MODEL_PATH)
 mlp1 = mlp1["model"]
 # print("Clasificador MLP cargado.")
 
+# Modelo VGG16 entrenado
+MODEL_PATH = BASE_DIR / "vgg16_mnist.joblib"
+vgg1 = joblib.load(MODEL_PATH)
+print("Clasificador VGG16 cargado.")
+
 X_train, y_train, X_test, y_test = load_mnist(mnist_path)
 
 # print("gp_generation_phase")
-target_class = 4
-generations = 390
-alpha = 0.7        # Peso del mse
+target_class = 8
+generations = 1390
+alpha = 0.5        # Peso del mse
 
 # PENALIZACIÓN POR PROFUNDIDAD
 MAX_DEPTH_ALLOWED = 7 
-DEPTH_PENALTY = 0.2
+DEPTH_PENALTY = 0.25
 
 pp_weight = 2.0  # Peso para las primitivas paramétricas
 
 target_images = X_train[y_train == target_class]
 
-target_image = (target_images[9].astype(np.float32))
+target_image = (target_images[59].astype(np.float32))
 
 
 # OPERADORES MORFOLÓGICOS
@@ -288,22 +295,20 @@ def generate_typed(pset, min_, max_, type_=None):
     return expr
 
 # Evaluación de individuos
-# gp_state["input_image"] 
-
-# Antes con mse
-# def evaluate_individual(individual):
-#      target_image = gp_state["target_image"]
-#      # func = toolbox.compile(expr=expr)
-#      func = toolbox.compile(expr=individual)
-#      generated_image = func
-#      fitness = mse(generated_image, target_image) # puede agregarse un criterio de paro en caso de que el fitness no mejore después de un número determinado de generaciones
-#      return (fitness,)
-
 # def evaluate_individual(individual):
 #     target_class = gp_state["target_class"]
 #     generated_image = toolbox.compile(expr=individual)
-#     probability = classifier_probability(generated_image, classifier=knn1, target_class=target_class) 
-#     fitness = 1.0 - probability
+#     # Probabilidad de pertenencia según VGG16
+#     probabilities = vgg1.predict_proba(generated_image)[0]
+#     probability = probabilities[target_class]
+    
+#     fitness_mse = mse(generated_image, target_image)
+#     fitness_vgg = 1.0 - probability
+#     fitness_base = ((1 - alpha) * fitness_vgg + alpha * (fitness_mse / 3000))
+#     # Penalización por profundidad
+#     depth = individual.height
+#     penalty = DEPTH_PENALTY * max(0, depth - MAX_DEPTH_ALLOWED)
+#     fitness = fitness_base + penalty
 #     return (fitness,)
 
 def evaluate_individual(individual):
@@ -311,6 +316,7 @@ def evaluate_individual(individual):
     generated_image = toolbox.compile(expr=individual)
     # probability_knn = classifier_probability(generated_image, classifier=knn1, target_class=target_class)
     probability = classifier_probability(generated_image, classifier=mlp1, target_class=target_class)
+
     fitness_mse = mse(generated_image, target_image)
     fitness_mlp = 1.0 - probability
     # fitness_knn = 1.0 - probability_knn
@@ -471,11 +477,11 @@ best_image = best_function #(gp_state["input_image"])
 print("MSE =", mse(best_image, gp_state["target_image"]))
 
 iresult = preprocess_for_knn(best_image)
-probabilidades = mlp1.predict_proba(iresult)[0]
-clases = np.asarray(mlp1.classes_)
-print("Predicción mlp:", clases[np.argmax(probabilidades)])
+probabilidades = vgg1.predict_proba(iresult)[0]
+clases = np.asarray(vgg1.classes_)
+print("Predicción vgg1:", clases[np.argmax(probabilidades)])
 print("Probabilidades:", probabilidades)
-print("Con una Probabilidad:", probabilidades[np.where(clases == target_class)[0][0]] * 100, "%")
+print("Probabilidad de target:", probabilidades[np.where(clases == target_class)[0][0]] * 100, "%")
 
 print(f"Semilla utilizada: {RANDOM_SEED}")
 # print("Predicción knn:", knn1.predict(iresult)[0])
